@@ -15,6 +15,7 @@ class Shell():
   _b_true = b"\1"
 
   events_file_name = "events.py"
+  import_error_file_name = ".import_error"
 
   def __init__(self, main_block) -> None:
     self.file_path = None
@@ -43,8 +44,16 @@ class Shell():
   def _import_events(self):
     try:
       import events #events will planned
+      print("events loaded successfully")
+      return True
     except Exception as error:
       print("import events raised exception: ", error)
+      import sys
+      with open(self.import_error_file_name, "w") as file:
+        sys.print_exception(error, file)
+      sys.print_exception(error, sys.stdout)
+      return False
+
   def load_events(self):
     if self.file_exists(self.events_file_name):
       self._import_events()
@@ -84,8 +93,12 @@ class Shell():
           return self._b_true
 
         elif command == self._cmd_start_program:
-          self._import_events()
-          return self._b_true
+          if self._import_events():
+            return self._b_true
+          else:
+            #TODO: stacktrace longer than one message (512 B?)
+            with open(self.import_error_file_name, "r") as file:
+              return file.read()
 
         elif command == self._cmd_get_next_file_info:
           if not self.dir_content:
