@@ -7,35 +7,56 @@ class RgbLedBlockCommand():
     set_on = 3
     set_off = 4
 
-class RgbLedBlockColor():
-  black = 1
-  white = 2
-  red = 3
-  green = 4
-  blue = 5
-  yellow = 6
-  purple = 7
-  cyan = 8
-  orange = 9
-  greenyellow = 10
-  skyblue = 11
-  aquamarine = 12
-  magenta = 13
-  violet = 14
+class Rgb():
+  def __init__(self, red, green, blue) -> None:
+    self.red = red
+    self.green = green
+    self.blue = blue
 
-class RgbBlock(BlockBase):
+class RgbLedBlockColor():
+  black = Rgb(0, 0 ,0)
+  white = Rgb(255, 255 ,255)
+  red = Rgb(255, 0 ,0)
+  green = Rgb(0, 255, 0)
+  blue = Rgb(0, 0 ,255)
+  yellow = Rgb(255, 225,0)
+  purple = Rgb(255, 0 ,255)
+  cyan = Rgb(0, 255, 255)
+  orange = Rgb(255, 127,0)
+  greenyellow = Rgb(127, 255,0)
+  skyblue = Rgb(0, 127,255)
+  aquamarine = Rgb(0, 255, 127)
+  magenta = Rgb(255, 0, 127)
+  violet = Rgb(127, 0, 255)
+
+class RgbLedBlock(BlockBase):
   type_id_rgb = 0x02
+  colors = (
+    RgbLedBlockColor.black,
+    RgbLedBlockColor.white,
+    RgbLedBlockColor.red,
+    RgbLedBlockColor.green,
+    RgbLedBlockColor.blue,
+    RgbLedBlockColor.yellow,
+    RgbLedBlockColor.purple,
+    RgbLedBlockColor.cyan,
+    RgbLedBlockColor.orange,
+    RgbLedBlockColor.greenyellow,
+    RgbLedBlockColor.skyblue,
+    RgbLedBlockColor.aquamarine,
+    RgbLedBlockColor.magenta,
+    RgbLedBlockColor.violet
+  )
 
   def __init__(self, address):
     super().__init__(self.type_id_rgb, address)
     self.state = ActiveVariable(False)
 
   def toggle(self):
-    if self.state:
-      self.tiny_write(RgbLedBlockCommand.set_off)
+    if self.state.get_value():
+      self.set_off()
     else:
-      self.tiny_write(RgbLedBlockCommand.set_on)
-    self.state.set_value(not self.state)
+      self.set_on()
 
   def set_rgb(self, red: int, green: int, blue: int):
     self.tiny_write(
@@ -44,15 +65,12 @@ class RgbBlock(BlockBase):
     )
     self.state.set_value(red or green or blue)
 
-  def set_color(self, color: int):
-    print("set_color")
-    self.tiny_write(RgbLedBlockCommand.set_color, color.to_bytes(1, 'big'))
-    self.state.set_value(color != RgbBlockColor.black)
+  def set_color(self, index: int, ):
+    if index < len(self.colors):
+      self.set_rgb(self.colors[index].red, self.colors[index].green, self.colors[index].blue)
 
   def set_on(self):
-    self.tiny_write(RgbLedBlockCommand.set_on)
-    self.state.set_value(True)
+    self.set_rgb(RgbLedBlockColor.white.red, RgbLedBlockColor.white.green, RgbLedBlockColor.white.blue)
 
   def set_off(self):
-    self.tiny_write(RgbLedBlockCommand.set_off)
-    self.state.set_value(False)
+    self.set_rgb(RgbLedBlockColor.black.red, RgbLedBlockColor.black.green, RgbLedBlockColor.black.blue)
