@@ -1,14 +1,17 @@
 import machine
 
 from ble import Ble
-from shell import Shell
-from planner import Planner
+from logging import BleLogger, Logging
+from _shell import Shell
+from _planner import Planner
 
 class MainBlock():
   planner = Planner()
   def __init__(self) -> None:
     self.shell = Shell(self)
     self.ble = Ble(self.shell.command_request)
+
+    Logging().add_logger(BleLogger(self.planner, self.ble))
 
   def _reboot(self):
     machine.reset()
