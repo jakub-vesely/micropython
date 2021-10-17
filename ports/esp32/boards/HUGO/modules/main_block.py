@@ -2,8 +2,8 @@ import machine
 
 from ble import Ble
 from logging import BleLogger, Logging
-from _shell import Shell
-from _planner import Planner
+from shell import Shell
+from planner import Planner
 
 class MainBlock():
   planner = Planner()
