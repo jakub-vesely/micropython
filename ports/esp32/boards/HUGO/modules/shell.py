@@ -1,4 +1,5 @@
 import os
+from logging import Logging
 import hashlib
 
 class Shell():
@@ -23,6 +24,7 @@ class Shell():
     self.dir_content = None
     self.dir_pos = 0
     self.main_block = main_block
+    self.logging = Logging("Shell")
 
   def file_exists(self, path):
     try:
@@ -44,13 +46,11 @@ class Shell():
   def _import_events(self):
     try:
       import events #events will planned
-      print("events loaded successfully")
+      self.logging.info("events loaded successfully")
       return True
     except Exception as error:
-      print("import events raised exception: ", error)
+      self.logging.exception(error, extra_message="events.py was not imported properly")
       import sys
-      with open(self.import_error_file_name, "w") as file:
-        sys.print_exception(error, file)
       sys.print_exception(error, sys.stdout)
       return False
 
@@ -93,12 +93,7 @@ class Shell():
           return self._b_true
 
         elif command == self._cmd_start_program:
-          if self._import_events():
-            return self._b_true
-          else:
-            #TODO: stacktrace longer than one message (512 B?)
-            with open(self.import_error_file_name, "r") as file:
-              return file.read()
+          return self._b_true if self._import_events() else self._b_false
 
         elif command == self._cmd_get_next_file_info:
           if not self.dir_content:
