@@ -22,14 +22,29 @@ _FLAG_INDICATE = const(0x0020)
 
 _BMS_MTU = const(256)
 
+_SHELL_GET_PROPERTY_CHAR = (
+    bluetooth.UUID("48754770-0000-1000-8000-00805F9B34FB"),
+    _FLAG_READ | _FLAG_NOTIFY | _FLAG_INDICATE | _FLAG_WRITE | _FLAG_WRITE_NO_RESPONSE,
+)
+
+_SHELL_SET_PROPERTY_CHAR = (
+    bluetooth.UUID("48754771-0000-1000-8000-00805F9B34FB"),
+    _FLAG_READ | _FLAG_NOTIFY | _FLAG_INDICATE | _FLAG_WRITE | _FLAG_WRITE_NO_RESPONSE,
+)
+
 _SHELL_COMMAND_CHAR = (
     bluetooth.UUID("48754772-0000-1000-8000-00805F9B34FB"),
     _FLAG_READ | _FLAG_NOTIFY | _FLAG_INDICATE | _FLAG_WRITE | _FLAG_WRITE_NO_RESPONSE,
 )
 
+_LOG_CHAR = (
+    bluetooth.UUID("48754773-0000-1000-8000-00805F9B34FB"),
+    _FLAG_NOTIFY | _FLAG_INDICATE
+)
+
 _HUGO_SERVICE = (
     bluetooth.UUID("4875476F-0000-1000-8000-00805F9B34FB"),
-    (_SHELL_COMMAND_CHAR,),
+    (_SHELL_COMMAND_CHAR, _LOG_CHAR,),
 )
 
 #FIXME
@@ -40,6 +55,7 @@ class Ble():
     self._ble = bluetooth.BLE()
     self._shell_command_callback = shell_command_callback
     self._shell_command_handle = None
+    self._log_handle = None
     self._start_ble()
 
   def _start_ble(self):
@@ -47,11 +63,8 @@ class Ble():
     self._ble.config(rxbuf=_BMS_MTU)
     self._ble.irq(self._irq)
 
-    #FIXME: outgoing MPU is set to 256 by default I do not need to change I need to change incomming one which is set to 20
-    # in case of gatt is possible to use esp_ble_gatt_set_local_mtu but it is not used for micropython
     #self._ble.config(mtu=_BMS_MTU)
-    #self._ble.config(rxbuf=_BMS_MTU)
-    ((self._shell_command_handle,),) = self._ble.gatts_register_services((_HUGO_SERVICE,))
+    ((self._shell_command_handle,self._log_handle, ), ) = self._ble.gatts_register_services((_HUGO_SERVICE,))
     self._connections = set()
     self._payload = self.advertising_payload(
         name="HuGo", services=[_HUGO_SERVICE], appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER
@@ -124,3 +137,7 @@ class Ble():
   def disconnect(self):
     for connection in self._connections:
       self._ble.gap_disconnect(connection)
+
+  def notify_log(self, message):
+    for connection in self._connections:
+      self._ble.gatts_notify(connection, self._log_handle, message)
