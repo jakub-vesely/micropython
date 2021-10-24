@@ -25,18 +25,6 @@ class LoggerBase():
   def log(self, message):
     raise NotImplementedError
 
-class BleLogger():
-  def __init__(self, planner, ble):
-    self.planner = planner
-    self.ble = ble
-    #self.level = self.INFO
-
-  def _log_to_ble(self, message):
-    self.ble.notify_log(message)
-
-  def log(self, message):
-    self.planner.plan(self._log_to_ble, message)
-
 class Logging():
   CRITICAL = 51
   ERROR    = 41

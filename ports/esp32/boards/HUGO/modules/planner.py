@@ -1,44 +1,44 @@
 import uasyncio
 import sys
 from logging import Logging
-class Planner:
-  logging = Logging("planner")
-  _unhandled_exception_prefix = "Unhandled exception"
 
-  async def _async_plan(self, function, *args, **kwargs):
-    try:
-      function(*args, **kwargs)
-    except Exception as error:
-      self.logging.exception(error, extra_message=self._unhandled_exception_prefix)
+logging = Logging("planner")
+unhandled_exception_prefix = "Unhandled exception"
 
-  def plan(self, function, *args, **kwargs):
-    uasyncio.create_task(self._async_plan(function, *args, **kwargs))
+async def _async_plan(function, *args, **kwargs):
+  try:
+    function(*args, **kwargs)
+  except Exception as error:
+    logging.exception(error, extra_message=unhandled_exception_prefix)
 
-  async def _async_postpone(self, delay_s, function, *args, **kwargs):
-    await uasyncio.sleep(delay_s)
-    try:
-      function(*args, **kwargs)
-    except Exception as error:
-      self.logging.exception(error, extra_message=self._unhandled_exception_prefix)
+def plan(function, *args, **kwargs):
+  uasyncio.create_task(_async_plan(function, *args, **kwargs))
 
-  def postpone(self, delay_s, function, *args, **kwargs):
-    uasyncio.create_task(self._async_postpone(delay_s, function, *args, **kwargs))
+async def _async_postpone(delay_s, function, *args, **kwargs):
+  await uasyncio.sleep(delay_s)
+  try:
+    function(*args, **kwargs)
+  except Exception as error:
+    logging.exception(error, extra_message=unhandled_exception_prefix)
 
-  async def _async_repeat(self, delay_s, function, *args, **kwargs):
-    try:
-      function(*args, **kwargs)
-    except Exception as error:
-      self.logging.exception(error, extra_message=self._unhandled_exception_prefix)
+def postpone(delay_s, function, *args, **kwargs):
+  uasyncio.create_task(_async_postpone(delay_s, function, *args, **kwargs))
 
-    await uasyncio.sleep(delay_s)
-    uasyncio.create_task(self._async_repeat(delay_s, function, *args, **kwargs))
+async def _async_repeat(delay_s, function, *args, **kwargs):
+  try:
+    function(*args, **kwargs)
+  except Exception as error:
+    logging.exception(error, extra_message=unhandled_exception_prefix)
 
-  def repeat(self, delay_s, function, *args, **kwargs):
-    uasyncio.create_task(self._async_repeat(delay_s, function, *args, **kwargs))
+  await uasyncio.sleep(delay_s)
+  uasyncio.create_task(_async_repeat(delay_s, function, *args, **kwargs))
 
-  async def _async_main(self):
-    while True:
-      await uasyncio.sleep_ms(1000)
+def repeat(delay_s, function, *args, **kwargs):
+  uasyncio.create_task(_async_repeat(delay_s, function, *args, **kwargs))
 
-  def run(self):
-    uasyncio.run(self._async_main())
+async def _async_main():
+  while True:
+    await uasyncio.sleep_ms(1000)
+
+def run():
+  uasyncio.run(_async_main())

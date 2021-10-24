@@ -1,7 +1,8 @@
 import os
-from logging import Logging
 import hashlib
-
+from logging import Logging
+import main_block
+import planner
 class Shell():
   _cmd_version               = 0x80
   _cmd_stop_program          = 0x81
@@ -18,12 +19,11 @@ class Shell():
   events_file_name = "events.py"
   import_error_file_name = ".import_error"
 
-  def __init__(self, main_block) -> None:
+  def __init__(self) -> None:
     self.file_path = None
     self.new_file = False
     self.dir_content = None
     self.dir_pos = 0
-    self.main_block = main_block
     self.logging = Logging("Shell")
 
   def file_exists(self, path):
@@ -41,7 +41,7 @@ class Shell():
     os.rename(orig_file_path, dest_file_path)
 
   def _reboot(self):
-    self.main_block.reboot()
+    main_block.reboot()
 
   def _import_events(self):
     try:
@@ -89,7 +89,7 @@ class Shell():
         elif command == self._cmd_stop_program:
           if self.file_exists(self.events_file_name):
             self.rename_file(self.events_file_name, "." + self.events_file_name)
-          self.main_block.planner.postpone(0.1, self._reboot)
+          planner.postpone(0.1, self._reboot)
           return self._b_true
 
         elif command == self._cmd_start_program:

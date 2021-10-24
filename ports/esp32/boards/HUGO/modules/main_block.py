@@ -1,26 +1,17 @@
 import machine
-
+import planner
 from ble import Ble
-from logging import BleLogger, Logging
-from shell import Shell
-from planner import Planner
 
-class MainBlock():
-  planner = Planner()
-  def __init__(self) -> None:
-    self.shell = Shell(self)
-    self.ble = Ble(self.shell.command_request)
+ble = Ble()
 
-    Logging().add_logger(BleLogger(self.planner, self.ble))
+def _reboot():
+  machine.reset()
 
-  def _reboot(self):
-    machine.reset()
+def reboot():
+  print("rebooting")
+  ble.disconnect()
+  planner.postpone(0.1, _reboot)
 
-  def reboot(self):
-    print("rebooting")
-    self.ble.disconnect()
-    self.planner.postpone(0.1, self._reboot)
-
-  def run(self):
-    self.shell.load_events()
-    self.planner.run()
+def run():
+  ble.get_shell().load_events()
+  planner.run()
