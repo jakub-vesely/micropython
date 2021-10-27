@@ -38,7 +38,7 @@ def repeat(delay_s, function, *args, **kwargs):
 
 async def _async_main():
   while True:
-    await uasyncio.sleep_ms(1000)
+    await uasyncio.sleep_ms(0) #just to be started scheduled task TODO: power efficiency
 
 def run():
   uasyncio.run(_async_main())
