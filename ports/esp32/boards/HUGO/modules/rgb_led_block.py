@@ -30,7 +30,6 @@ class RgbLedBlockColor():
   violet = Rgb(127, 0, 255)
 
 class RgbLedBlock(BlockBase):
-  type_id_rgb = 0x02
   colors = (
     RgbLedBlockColor.black,
     RgbLedBlockColor.white,
@@ -49,7 +48,7 @@ class RgbLedBlock(BlockBase):
   )
 
   def __init__(self, address):
-    super().__init__(self.type_id_rgb, address)
+    super().__init__(self.type_rgb, address)
     self.state = ActiveVariable(False)
 
   def toggle(self):
@@ -59,7 +58,8 @@ class RgbLedBlock(BlockBase):
       self.set_on()
 
   def set_rgb(self, red: int, green: int, blue: int):
-    self.tiny_write(
+    self._tiny_write(
+        self.type_rgb,
         RgbLedBlockCommand.set_rgb,
         red.to_bytes(1, 'big') + green.to_bytes(1, 'big') + blue.to_bytes(1, 'big')
     )

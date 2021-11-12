@@ -1,34 +1,43 @@
 import ssd1306
 import uasyncio
 import math
-from extended_block_base import ExtendedBlockBase
+from extended_block_base import BlockWithOneExtension
 from active_variable import ActiveVariable
 
-class DisplayBlock(ExtendedBlockBase):
-  type_id_display =0x05
+class DisplayBlock(BlockWithOneExtension):
   _get_dimmensions_command = 0x03
 
   def __init__(self, address, invert=False):
-    super().__init__(self.type_id_display, address)
-    print("dimensions", self.get_dimensions())
+    super().__init__(self.type_display, address)
 
-    display_address = self.get_extension_address()
-    print("display_address", display_address)
-    self._display = ssd1306.SSD1306_I2C(64, 48, self.i2c, display_address)
+    dimensions = self.get_dimensions()
 
+    if not self.ext_address:
+      self.logging.error("display is not available")
+      self._display = None
+      return
+
+    try:
+      self._display = ssd1306.SSD1306_I2C(dimensions[0], dimensions[1], self.i2c, self.ext_address)
+    except Exception as error:
+      self.logging.exception(error, extra_message="ssd1306 was not initialized")
+
+  def change_extension_address(self, address:int) -> bool:
+    if super().change_extension_address(address):
+      self._display.addr = address
+      return True
+    else:
+      return False
 
   def get_ssd_i2c_address(self):
     return self.get_extension_address()
-
-  async def _async_get_dimensions(self):
-    dimensions_data = await self._async_tiny_read(self.type_id_display, self._get_dimmensions_command, None, 2)
-    return (dimensions_data[0], dimensions_data[1]) if dimensions_data and len(dimensions_data) == 2 else (0, 0)
 
   def get_dimensions(self):
     """
     returns display dimmensions as tuple (x, y). If dimensions are not provided is returned tuple (0,0)
     """
-    return uasyncio.get_event_loop().run_until_complete(self._async_get_dimensions())
+    dimensions_data = self._tiny_read(self.type_display.id, self._get_dimmensions_command, None, 2)
+    return (dimensions_data[0], dimensions_data[1]) if dimensions_data and len(dimensions_data) == 2 else (0, 0)
 
   async def _async_power_on(self, power_on):
     if power_on:

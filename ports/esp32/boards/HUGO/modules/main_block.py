@@ -15,3 +15,4 @@ def reboot():
 def run():
   ble.get_shell().load_events()
   planner.run()
+  print("program terminated")

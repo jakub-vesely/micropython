@@ -88,7 +88,6 @@ class Ble():
     )
 
     self._advertise()
-    #print("ble advertise")
 
   def get_shell(self):
     if not self._shell:
@@ -121,22 +120,18 @@ class Ble():
 
     elif event == _IRQ_GATTS_WRITE:
       conn_handle, value_handle = data
-      #print ("write " + str((conn_handle, value_handle)))
       value = self._ble.gatts_read(value_handle)
-      #print(("value",value))
       if value_handle == self._shell_command_handle:
         shell = self.get_shell()
         ret_data = shell.command_request(value)
         if ret_data is not None:
           self._ble.gatts_notify(conn_handle, value_handle, ret_data)
-        #print("notification sent:" + str(ret_data))
+
       if value_handle == self._keyboard_handle:
           keyboard = self.get_keyboard()
           keyboard.process_input(value)
     elif event == _IRQ_MTU_EXCHANGED:
       pass
-      #conn_handle, mtu = data
-      #print("mtu set to: ", str(mtu))
     else:
       print("unhandled event: " + str(event))
 
