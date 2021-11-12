@@ -1,47 +1,22 @@
 import sys
 import os
 
-#taken from https://docs.micropython.org/en/latest/reference/filesystem.html#hybrid-esp32
-class RAMBlockDev:
-  def __init__(self, block_size, num_blocks):
-    self.block_size = block_size
-    self.data = bytearray(block_size * num_blocks)
-
-  def readblocks(self, block_num, buf):
-    for i in range(len(buf)):
-      buf[i] = self.data[block_num * self.block_size + i]
-
-  def writeblocks(self, block_num, buf):
-    for i in range(len(buf)):
-      self.data[block_num * self.block_size + i] = buf[i]
-
-  def ioctl(self, op, arg):
-    if op == 4: # get number of blocks
-      return len(self.data) // self.block_size
-    if op == 5: # get block size
-      return self.block_size
-
 class LoggerBase():
   def log(self, message):
     raise NotImplementedError
 
 class Logging():
-  CRITICAL = 51
-  ERROR    = 41
-  WARNING  = 31
-  INFO     = 21
-  DEBUG    = 11
-  NOTSET   = 0
+  critical_id = 51
+  error_id    = 41
+  warning_id  = 31
+  info_id     = 21
+  debug_id    = 11
+  not_set_i   = 0
 
   loggers = list()
-  def __init__(self, tag=None):
-    self.level = self.INFO
-    self.tag = tag if tag else ""
-
-    #TODO: block count - reduce size
-    #ram_disk = RAMBlockDev(512, 5)
-    #os.VfsFat.mkfs(ram_disk)
-    #os.mount(ram_disk, '/ramdisk')
+  def __init__(self, tag=""):
+    self.level = self.info_id
+    self.tag = tag
 
   @staticmethod
   def add_logger(logger):
@@ -56,11 +31,14 @@ class Logging():
       return
 
     prefix = bytes([level]) + (self.tag + ": ").encode("utf-8") if has_prefix else b""
-    complete = prefix + ((message % args) if args else message).encode("utf-8")
+    try:
+      complete = prefix + ((message % args) if args else message).encode("utf-8")
+    except (AttributeError, TypeError) as error:
+      complete = prefix + (str((message, args)) if args else str(message)).encode("utf-8")
     for logger in self.loggers:
       logger.log(complete)
 
-  def exception(self, exc, level=ERROR, extra_message=None):
+  def exception(self, exc, level=error_id, extra_message=None):
     if level < self.level:
       return
 
@@ -86,16 +64,40 @@ class Logging():
     os.remove(file_name)
 
   def debug(self, msg, *args):
-    self.log(self.DEBUG, msg, *args)
+    self.log(self.debug_id, msg, *args)
 
   def info(self, msg, *args):
-    self.log(self.INFO, msg, *args)
+    self.log(self.info_id, msg, *args)
 
   def warning(self, msg, *args):
-    self.log(self.WARNING, msg, *args)
+    self.log(self.warning_id, msg, *args)
 
   def error(self, msg, *args):
-    self.log(self.ERROR, msg, *args)
+    self.log(self.error_id, msg, *args)
 
   def critical(self, msg, *args):
-    self.log(self.CRITICAL, msg, *args)
+    self.log(self.critical_id, msg, *args)
+
+class SerialLogger(LoggerBase):
+  critical_str = "C"
+  error_str = "E"
+  warning_str = "W"
+  info_str = "I"
+  debug_str = "D"
+
+  def log(self, message):
+    level = message[0]
+    if level == Logging.critical_id:
+      level_str = self.critical_str
+    elif level == Logging.error_id:
+      level_str = self.error_str
+    elif level == Logging.warning_id:
+      level_str = self.warning_str
+    elif level == Logging.info_id:
+      level_str = self.info_str
+    elif level == Logging.debug_id:
+      level_str = self.debug_str
+
+    print("{0: <1} {1}".format(level_str, message[1:].decode("utf-8")))
+
+#Logging.loggers.append(SerialLogger())

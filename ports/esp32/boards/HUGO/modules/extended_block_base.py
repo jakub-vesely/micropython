@@ -1,46 +1,66 @@
-import uasyncio
+import planner
 from block_base import BlockBase
 
 class ExtendedBlockBase(BlockBase):
-  get_ext_count_command =       0xf9
-  get_ext_address_command =     0xfa
-  change_ext_address_command =  0xfb
-  get_ext_addr_count_command =  0xfc
-  get_ext_addr_list_command =   0xfd
+  _get_ext_count_command =       0xf9
+  _get_ext_address_command =     0xfa
+  _change_ext_address_command =  0xfb
+  _get_ext_addr_count_command =  0xfc
+  _get_ext_addr_list_command =   0xfd
 
-  def __init__(self, type_id: int, address: int):
-    super(type_id, address)
-
-  async def _async_get_extension_count(self):
-    return await self._async_tiny_read(
-      self.i2c_block_type_id_base, self.get_ext_count_command, None, 1
-    )
   def get_extension_count(self) -> int:
-    return uasyncio.get_event_loop().run_until_complete(self._async_get_extension_count())
-
-  async def _async_get_ext_address_list(self, order):
-    count_data = await self._async_tiny_read(
-      self.i2c_block_type_id_base, self.get_ext_addr_count_command, bytes([order]), 1
+    data= self._tiny_read(
+      self.i2c_block_type_id_base, self._get_ext_count_command, None, 1
     )
-    return await self._async_tiny_read(
-      self.i2c_block_type_id_base, self.get_ext_addr_list_command, bytes([order]), count_data[0]
+    return data[0]
+
+  def get_ext_address_list(self) -> bytes:
+    count_data = self._tiny_read(
+      self.i2c_block_type_id_base, self._get_ext_addr_count_command, None, 1
     )
+    data =  self._tiny_read(
+      self.i2c_block_type_id_base, self._get_ext_addr_list_command, None, count_data[0]
+    )
+    return list(data)
 
-  def get_ext_address_list(self, order=0) -> bytes:
-    return uasyncio.get_event_loop().run_until_complete(self._async_get_ext_address_list(order))
-
-  async def _async_get_extension_address(self):
-    address_data = await self._async_tiny_read(
-      self.i2c_block_type_id_base, self.get_ext_address_command, None, 1
+  def get_extension_address(self) -> int:
+    address_data = self._tiny_read(
+      self.i2c_block_type_id_base, self._get_ext_address_command, None, 1
     )
     return address_data[0] if address_data else None
 
-  def get_extension_address(self, index=0) -> int:
-    return uasyncio.get_event_loop().run_until_complete(self._async_get_extension_address())
-
-  async def _async_change_extension_address(self, extension, address):
-    return await self._async_tiny_read(
-      self.i2c_block_type_id_base, self.change_ext_address_command, bytes([extension, address]), 1
+  def change_extension_address(self, address:int) -> bool:
+    return self._tiny_read(
+      self.i2c_block_type_id_base, self._change_ext_address_command, bytes([address]), 1
     )
-  def change_extension_address(self, extension:int,  address:int) -> bool:
-    return uasyncio.get_event_loop().run_until_complete(self._async_change_extension_address(extension, address))
+
+  def _ext_write(self, ext_address: int, data: bytes):
+    try:
+      self.i2c.writeto(ext_address, data)
+    except OSError:
+      self.logging.error("ext address 0x%02X is unavailable for writing", ext_address)
+
+  def _ext_read(self, ext_address: int, in_data: bytes=None, expected_length: int=0):
+    self._ext_write(ext_address, in_data)
+    try:
+      return self.i2c.readfrom(ext_address, expected_length, True)
+    except OSError:
+      self.logging.error("ext address 0x%02X is unavailable for reading", ext_address)
+    return None
+
+class BlockWithOneExtension(ExtendedBlockBase):
+  def __init__(self, type_id: int, address: int):
+    super().__init__(type_id, address)
+    self.ext_address = self.get_extension_address()
+
+  def change_extension_address(self, address:int) -> bool:
+    if super().change_extension_address(address):
+      self.ext_address = address
+      return True
+    return False
+
+  def _one_ext_write(self, data: bytes):
+    self._ext_write(self.ext_address, data)
+
+  def _one_ext_read(self, in_data: bytes=None, expected_length: int=0):
+    return self._ext_read(self.ext_address, in_data, expected_length)
