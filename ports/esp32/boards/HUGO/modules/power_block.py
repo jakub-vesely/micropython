@@ -44,12 +44,12 @@ class PowerBlock(BlockWithOneExtension):
     if self.block_version[1] < 2 and self.block_version[2] < 1:
       return -1 #not implemented for this version
 
-    state = self._tiny_read(self.type_power.id, self._charging_state_command, None, 1)
+    state = self._tiny_read(self._charging_state_command, None, 1)
     self.logging.info("_get_usb_state: %s, %d", str(state), state[0] >> 1)
     return state[0] >> 1
 
   def _get_charging_state(self) -> int:
-    state = self._tiny_read(self.type_power.id, self._charging_state_command, None, 1)
+    state = self._tiny_read(self._charging_state_command, None, 1)
     return state[0] & 1
 
   def _get_voltage(self) -> float:
