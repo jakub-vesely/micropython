@@ -59,7 +59,6 @@ class RgbLedBlock(BlockBase):
 
   def set_rgb(self, red: int, green: int, blue: int):
     self._tiny_write(
-        self.type_rgb,
         RgbLedBlockCommand.set_rgb,
         red.to_bytes(1, 'big') + green.to_bytes(1, 'big') + blue.to_bytes(1, 'big')
     )

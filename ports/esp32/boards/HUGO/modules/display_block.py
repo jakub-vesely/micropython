@@ -36,7 +36,7 @@ class DisplayBlock(BlockWithOneExtension):
     """
     returns display dimmensions as tuple (x, y). If dimensions are not provided is returned tuple (0,0)
     """
-    dimensions_data = self._tiny_read(self.type_display.id, self._get_dimmensions_command, None, 2)
+    dimensions_data = self._tiny_read(self._get_dimmensions_command, None, 2)
     return (dimensions_data[0], dimensions_data[1]) if dimensions_data and len(dimensions_data) == 2 else (0, 0)
 
   async def _async_power_on(self, power_on):

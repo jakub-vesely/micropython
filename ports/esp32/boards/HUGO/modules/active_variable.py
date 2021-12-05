@@ -52,7 +52,7 @@ class ActiveVariable():
         if value != old_value:
           listener[3](*listener[4], **listener[5])
       else:
-        logging.error("unknown listener type %s" % str(listener[1]))
+        self.logging.error("unknown listener type %s" % str(listener[1]))
         processed = False
 
       if processed and not repeat:
@@ -73,7 +73,7 @@ class ActiveVariable():
     self._listeners.append(listener)
     self._handle_count += 1
 
-  def remove(self, handle):
+  def remove_trigger(self, handle):
     for listener in self._listeners:
       if listener[0] == handle:
         self._listeners.remove(listener)
@@ -83,39 +83,27 @@ class ActiveVariable():
         return True
     return False
 
-  def equal_to(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.equal_to, False, expected, function, args, kwargs))
+  def equal_to_trigger(self, expected, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.equal_to, expected, repetitive, function, args, kwargs))
+    return self._handle_count
 
-  def equal_to_repeat(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.equal_to, True, expected, function, args, kwargs))
+  def less_than_trigger(self, expected, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.less_than, expected, repetitive, function, args, kwargs))
+    return self._handle_count
 
-  def less_than(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.less_than, False, expected, function, args, kwargs))
+  def more_than(self, expected, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.more_than, expected, repetitive, function, args, kwargs))
+    return self._handle_count
 
-  def less_than_repeat(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.less_than, True, expected, function, args, kwargs))
+  def in_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.in_range, expected_min, expected_max, repetitive, function, args, kwargs))
+    return self._handle_count
 
-  def more_than(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.more_than, False, expected, function, args, kwargs))
+  def out_of_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.out_of_range, expected_min, expected_max, repetitive, function, args, kwargs))
+    return self._handle_count
 
-  def more_than_repeat(self, expected, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.more_than, True, expected, function, args, kwargs))
-
-  def in_range(self, expected_min, expected_max, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.in_range, False, expected_min, expected_max, function, args, kwargs))
-
-  def in_range_repeat(self, expected_min, expected_max, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.in_range, True, expected_min, expected_max, function, args, kwargs))
-
-  def out_of_range(self, expected_min, expected_max, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.out_of_range, False, expected_min, expected_max, function, args, kwargs))
-
-  def out_of_range_repeat(self, expected_min, expected_max, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.out_of_range, True, expected_min, expected_max, function, args, kwargs))
-
-  def changed(self, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.value_changed, False, function, args, kwargs))
-
-  def changed_repeat(self, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.value_changed, True, function, args, kwargs))
+  def changed(self, repetitive, function, *args, **kwargs):
+    self._add_listener((self._handle_count, Conditions.value_changed, repetitive, function, args, kwargs))
+    return self._handle_count
 
