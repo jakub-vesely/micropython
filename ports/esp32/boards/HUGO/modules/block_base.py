@@ -8,11 +8,15 @@ class BlockType:
     self.name = name
 
 class BlockBase:
-  type_power = BlockType(0x01, "power_block")
-  type_rgb = BlockType(0x02, "rgb_block")
-  type_motor_driver = BlockType(0x03, "motor_block")
-  # type_id_ir = BlockType(0x04, "ir_block")
-  type_display = BlockType(0x05, "disp_block")
+  type_power = BlockType(0x08, "power_block")
+  type_rgb = BlockType(0x09, "rgb_block")
+  type_motor_driver = BlockType(0x0a, "motor_block")
+  type_display = BlockType(0x0b, "disp_block")
+  type_sound = BlockType(0x0c, "disp_block")
+  type_buttom = BlockType(0x0d, "disp_button")
+  type_position = BlockType(0x0e, "disp_position")
+  type_ambient = BlockType(0x0f, "disp_ambient")
+  # type_id_ir = BlockType(0x10, "ir_block")
 
   get_module_version_command = 0xf7
   change_i2c_address_command =  0xfe
@@ -23,7 +27,7 @@ class BlockBase:
 
   def __init__(self, block_type: int, address: int):
     self.type_id = block_type.id
-    self.address = address
+    self.address = address if address else block_type.id #default block i2c address is equal to its block type
     self.logging = Logging(block_type.name)
     self.block_type_valid = True
     self.block_version = self._get_block_version()
