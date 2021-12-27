@@ -19,19 +19,23 @@ class MotorDriverBlock(BlockBase):
   reset_counter_command = 6
   get_counter_command = 7
   set_speed_command = 8
+  set_pwm_period_command = 9
 
   motor1_id = 1
   motor2_id = 2
 
-  def __init__(self, address, get_counter_period=1):
+  def __init__(self, address=None, get_counter_period=1):
     super().__init__(self.type_motor_driver, address)
     self.motor1_sensor_counter = ActiveVariable(0, get_counter_period, self._get_sensor_counter_m1)
     self.motor2_sensor_counter = ActiveVariable(0, get_counter_period, self._get_sensor_counter_m2)
 
-  def _send_simple_command(self, command_id, motor_id, data=None):
-    full_data = motor_id.to_bytes(1, "big", False)
-    if data:
-      full_data += data
+  def _send_simple_command(self, command_id, motor_id=None, data=None):
+    if motor_id:
+      full_data = motor_id.to_bytes(1, "big", False)
+      if data:
+        full_data += data
+    else:
+      full_data = data
     self._tiny_write(command_id, full_data)
 
   def turn_clockwise(self, motor_id):
@@ -43,11 +47,11 @@ class MotorDriverBlock(BlockBase):
   def stop(self, motor_id):
     self._send_simple_command(self.stop_command, motor_id)
 
-  def sensor_power_off(self, motor_id):
-    self._send_simple_command(self.power_off_command, motor_id)
+  def sensor_power_off(self):
+    self._send_simple_command(self.power_off_command)
 
-  def sensor_power_on(self, motor_id):
-    self._send_simple_command(self.power_on_command, motor_id)
+  def sensor_power_on(self):
+    self._send_simple_command(self.power_on_command)
 
   def reset_sensor_counter(self, motor_id):
     self._send_simple_command(self.reset_counter_command, motor_id)
@@ -68,7 +72,15 @@ class MotorDriverBlock(BlockBase):
     """
     if speed < 0:
       speed = 0
-    if speed > 10:
-      speed = 10
+    if speed > 100:
+      speed = 100
+    self.logging.info("motor_id", motor_id, "speed", speed)
     self._send_simple_command(self.set_speed_command, motor_id, speed.to_bytes(1, "big", False))
-    #self._send_simple_command(self.set_speed_command, motor_id)
+
+  def set_pwm_period(self, period):
+    """expected period in the range (1 to 100) where the step is 10ms"""
+    if period > 255:
+      period = 255
+    if period < 1:
+      period = 1
+    self._send_simple_command(self.set_pwm_period_command, data=period.to_bytes(1, "big", False))

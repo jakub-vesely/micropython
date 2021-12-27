@@ -20,7 +20,7 @@ class PowerBlock(BlockWithOneExtension):
 
   shunt_r = 0.1
 
-  def __init__(self, address: int, measurement_period: float=1):
+  def __init__(self, address: int=None, measurement_period: float=1):
     super().__init__(self.type_power, address)
     self.is_usb_connected = ActiveVariable(False, measurement_period, self._get_usb_state)
     self.is_charging = ActiveVariable(False, measurement_period, self._get_charging_state)

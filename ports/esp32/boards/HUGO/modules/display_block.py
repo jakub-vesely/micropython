@@ -7,7 +7,7 @@ from active_variable import ActiveVariable
 class DisplayBlock(BlockWithOneExtension):
   _get_dimmensions_command = 0x03
 
-  def __init__(self, address, invert=False):
+  def __init__(self, address=None, invert=False):
     super().__init__(self.type_display, address)
 
     dimensions = self.get_dimensions()

@@ -47,7 +47,7 @@ class RgbLedBlock(BlockBase):
     RgbLedBlockColor.violet
   )
 
-  def __init__(self, address):
+  def __init__(self, address=None):
     super().__init__(self.type_rgb, address)
     self.state = ActiveVariable(False)
 
