@@ -16,7 +16,7 @@ class Shell():
   _b_false = b"\0"
   _b_true = b"\1"
 
-  events_file_name = "events.py"
+  events_file_name = "events.mpy"
   import_error_file_name = ".import_error"
 
   def __init__(self) -> None:
