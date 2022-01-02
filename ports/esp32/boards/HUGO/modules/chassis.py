@@ -1,146 +1,165 @@
-import logging
-from power_block import PowerBlock
 from motor_driver_block import MotorDriverBlock
 from logging import Logging
-class Direction():
+from power_block import PowerBlock
+
+class State:
+  def __init__(self, left, right, pwm) -> None:
+    self.left = left
+    self.right = right
+    self.pwm = pwm
+
+class Direction:
+  backward = 0
   forward = 1
-  backward = 2
 
-class Chassis():
-  # f - forward
-  # b - backward
-  # c - clockwise
-  # a - anticlockwise (opposite)
+class Speed:
+  stop = 0
+  slow = 1
+  normal = 2
+  fast = 3
 
-  # func          | dir | turn  | l_rot | r_rot | l_speed | r_speed
-  #---------------|-----|-------|-------|-------|---------|---------
-  # go_left(100)  | f   | -100  | c     | c     | 100     | 100
-  # go_left(100)  | b   | -100  | a     | a     | 100     | 100
-  #
-  # go_left(50)   | f   | -50   | a/c   | c     | 0       | 100
-  # go_left(50)   | b   | -50   | a/c   | a     | 0       | 100
-  #
-  # go_straight() | f   | 0     | a     | c     | 100     | 100
-  # go_straight() | b   | 0     | c     | a     | 100     | 100
-  #
-  # go_right(25)  | f   | 25    | a     | c     | 100     | 50
-  # go_right(25)  | b   | 25    | c     | a     | 100     | 50
-  #
-  # go_right(50)  | f   | 50    | a     | a/c   | 100     | 0
-  # go_right(50)  | b   | 50    | c     | a/c   | 100     | 0
-  #
-  # go_right(75)  | f   | 75    | a     | a     | 100     | 50
-  # go_right(75)  | b   | 75    | c     | c     | 100     | 50
-  #
-  # go_right(100) | f   | 100   | a     | a     | 100     | 100
-  # go_right(100) | b   | 100   | c     | c     | 100     | 100
+class Manoeuver:
+  rotate_left = 0
+  sharply_left = 1
+  slightly_left = 2
+  straight = 3
+  slightly_right = 4
+  sharply_right = 5
+  rotate_right = 6
 
-  # turning | -100 | -75 | -50 | -25 | 0   | 25  | 50  | 75  | 100
-  #---------|------|-----|-----|-----|-----|-----|-----|-----|-----
-  # speed l | 100  | 50  |  0  | 50  | 100 | 100 | 100 | 100 | 100
-  # speed r | 100  | 100 | 100 | 100 | 100 | 50  | 0   | 50  | 100
-
-  logging = Logging("chassis")
-  left_id = MotorDriverBlock.motor2_id
-  right_id = MotorDriverBlock.motor1_id
-
-  def __init__(self, addr_power, addr_front_driver, addr_rear_driver):
+class Chassis:
+  state = {}
+  def __init__(self, address_driver_front, address_driver_rear, addr_power):
+    self.speed = Speed.stop
+    self.manoeuver = Manoeuver.straight
+    self.direction = Direction.forward
+    self.logging = Logging("chassis")
     self.power = PowerBlock(addr_power)
-    self.front_driver = MotorDriverBlock(addr_front_driver)
-    self.front_driver.set_pwm_period(0)
-    self.rear_driver = MotorDriverBlock(addr_rear_driver)
-    self.rear_driver.set_pwm_period(0)
+    self.front_driver = MotorDriverBlock(address_driver_front)
+    self.rear_driver = MotorDriverBlock(address_driver_rear)
 
-    self.direction = Direction.forward
-    self.turning = 0 #expected numbers -100 left max; 100 right max
-    self.speed = 0 #expected 0 - no move; 100 - max speed
-
-  def _set_limits(self):
-    if self.speed < 0:
-      self.speed = 0
-    if self.speed > 100:
-      self.speed = 100
-    if self.turning < -100:
-      self.turning = -100
-    if self.turning > 100:
-      self.turning = 100
-
-  def _adjust_motion(self):
-    self._set_limits()
-
-    if (self.direction == Direction.forward and self.turning >= -50) or (self.direction == Direction.backward and self.turning < -50):
-      self.front_driver.turn_opposite(self.left_id)
-      self.rear_driver.turn_opposite(self.left_id)
+  def _set_driver_values(self, driver:MotorDriverBlock, left_speed, right_speed, pwm):
+    positive_speed = left_speed if left_speed > 0 else left_speed * -1
+    if left_speed > 0 and self.direction == Direction.forward:
+      driver.turn_clockwise(MotorDriverBlock.motor1_id)
     else:
-      self.front_driver.turn_clockwise(self.left_id)
-      self.rear_driver.turn_clockwise(self.left_id)
+      driver.turn_opposite(MotorDriverBlock.motor1_id)
+    driver.set_speed(MotorDriverBlock.motor1_id, positive_speed)
 
-    if (self.direction == Direction.forward and self.turning >= 50) or (self.direction == Direction.backward and self.turning < 50):
-      self.front_driver.turn_opposite(self.right_id)
-      self.rear_driver.turn_opposite(self.right_id)
+    positive_speed = right_speed if right_speed > 0 else right_speed * -1
+    if right_speed > 0 and self.direction == Direction.forward:
+      driver.turn_opposite(MotorDriverBlock.motor2_id)
     else:
-      self.front_driver.turn_clockwise(self.right_id)
-      self.rear_driver.turn_clockwise(self.right_id)
+      driver.turn_clockwise(MotorDriverBlock.motor2_id)
+    driver.set_speed(MotorDriverBlock.motor2_id, positive_speed)
+    driver.set_pwm_period(pwm)
 
-    l_factor = 1
-    r_factor = 1
-    if self.turning < 0 and self.turning >= -50:
-      l_factor = (100 + self.turning * 2) * 0.01
-    elif self.turning < -50:
-      l_factor = ((self.turning + 50) * 2) * -0.01
+  def _set_values(self, l_speed, r_speed, pwm):
+    self.logging.info("l_speed: {0}, r_speed: {1}, pwm: {2}".format(l_speed, r_speed, pwm))
+    self._set_driver_values(self.front_driver, l_speed, r_speed, pwm)
+    self._set_driver_values(self.rear_driver, l_speed, r_speed, pwm)
 
-    if self.turning >= 0 and self.turning < 50:
-      r_factor = (50 - self.turning) * 2 * 0.01
-    elif self.turning >= 50:
-      r_factor = ((self.turning - 50) * 2) * 0.01
+  def _adjust_movement(self):
+    self.logging.info("direction: {0}, speed: {1}, manoeuver: {2}".format(self.direction, self.speed, self.manoeuver))
+    if self.speed == Speed.fast:
+      if self.manoeuver == Manoeuver.rotate_left:
+        self._set_values(l_speed=90, r_speed=-90, pwm=50)
+      elif self.manoeuver == Manoeuver.sharply_left:
+        self._set_values(l_speed=100, r_speed=0, pwm=50)
+      elif self.manoeuver == Manoeuver.slightly_left:
+        self._set_values(l_speed=100, r_speed=20, pwm=80)
+      elif self.manoeuver == Manoeuver.straight:
+        self._set_values(l_speed=90, r_speed=90, pwm=50)
+      elif self.manoeuver == Manoeuver.slightly_right:
+        self._set_values(l_speed=20, r_speed=100, pwm=80)
+      elif self.manoeuver == Manoeuver.sharply_right:
+        self._set_values(l_speed=0, r_speed=100, pwm=50)
+      elif self.manoeuver == Manoeuver.rotate_right:
+        self._set_values(l_speed=-90, r_speed=90, pwm=50)
 
-    self.logging.info(("l_factor", l_factor))
-    self.logging.info(("r_factor", r_factor))
+    elif self.speed == Speed.normal:
+      if self.manoeuver == Manoeuver.rotate_left:
+        self._set_values(l_speed=70, r_speed=-70, pwm=50)
+      elif self.manoeuver == Manoeuver.sharply_left:
+        self._set_values(l_speed=70, r_speed=0, pwm=80)
+      elif self.manoeuver == Manoeuver.slightly_left:
+        self._set_values(l_speed=70, r_speed=15, pwm=80)
+      elif self.manoeuver == Manoeuver.straight:
+        self._set_values(l_speed=60, r_speed=60, pwm=50)
+      elif self.manoeuver == Manoeuver.slightly_right:
+        self._set_values(l_speed=15, r_speed=70, pwm=80)
+      elif self.manoeuver == Manoeuver.sharply_right:
+        self._set_values(l_speed=0, r_speed=70, pwm=80)
+      elif self.manoeuver == Manoeuver.rotate_right:
+        self._set_values(l_speed=-70, r_speed=70, pwm=80)
 
-    self.front_driver.set_speed(self.left_id, int(float(self.speed) * l_factor))
-    self.front_driver.set_speed(self.right_id, int(float(self.speed) * r_factor))
-    self.rear_driver.set_speed(self.left_id, int(float(self.speed) * l_factor))
-    self.rear_driver.set_speed(self.right_id, int(float(self.speed) * r_factor))
+    elif self.speed == Speed.slow:
+      if self.manoeuver == Manoeuver.rotate_left:
+        self._set_values(l_speed=40, r_speed=-40, pwm=80)
+      elif self.manoeuver == Manoeuver.sharply_left:
+        self._set_values(l_speed=40, r_speed=0, pwm=80)
+      elif self.manoeuver == Manoeuver.slightly_left:
+        self._set_values(l_speed=50, r_speed=15, pwm=80)
+      elif self.manoeuver == Manoeuver.straight:
+        self._set_values(l_speed=30, r_speed=30, pwm=80)
+      elif self.manoeuver == Manoeuver.slightly_right:
+        self._set_values(l_speed=15, r_speed=50, pwm=80)
+      elif self.manoeuver == Manoeuver.sharply_right:
+        self._set_values(l_speed=0, r_speed=40, pwm=80)
+      elif self.manoeuver == Manoeuver.rotate_right:
+        self._set_values(l_speed=-40, r_speed=40, pwm=80)
 
-  def go_forward(self, speed=100):
-    """
-    @param: factor: ; expected number in range 0 - 100
-    """
-    self.direction = Direction.forward
-    self.speed = speed
-    self._adjust_motion()
+    elif self.speed == Speed.stop:
+      self._set_values(0, 0, 80)
 
-  def go_backward(self, speed=100):
-    """
-    @param: factor: ; expected number in range 0 - 100
-    """
-    self.direction = Direction.backward
-    self.speed = speed
-    self._adjust_motion()
+  def set_direction(self, direction:Direction):
+    if direction > Direction.forward:
+      self.direction = Direction.forward
+    elif direction < Direction.backward:
+      self.direction = Direction.backward
+    else:
+      self.direction = direction
+    self._adjust_movement()
 
-  def stop(self):
-    self.speed = 0
-    self.turning = 0
-    self._adjust_motion()
+  def set_speed(self, speed:Speed):
+    if speed < Speed.stop:
+      self.speed == Speed.stop
+    elif speed > Speed.fast:
+      self.speed == Speed.fast
+    else:
+      self.speed = speed
+    self._adjust_movement()
 
-  def turn_left(self, factor):
-    """
-    @param: factor: ; factor of turning 0 (no turing) - 100 (max turning)
-    """
-    self.turning = -factor
-    self._adjust_motion()
+  def set_manoeuver(self, manoeuver:Manoeuver):
+    if manoeuver < Manoeuver.rotate_left:
+      self.manoeuver = Manoeuver.rotate_left
+    elif manoeuver > Manoeuver.rotate_right:
+      self.manoeuver = Manoeuver.rotate_right
+    else:
+      self.manoeuver = manoeuver
+    self._adjust_movement()
 
-  def turn_right(self, factor):
-    """
-    @param: factor: ; factor of turning 0 (no turing) - 100 (max turning)
-    """
-    self.turning = factor
-    self._adjust_motion()
-
-  def sensors_on(self):
+  def counter_sensors_on(self):
     self.front_driver.sensor_power_on()
     self.rear_driver.sensor_power_on()
 
-  def sensors_off(self):
+  def counter_sensors_off(self):
     self.front_driver.sensor_power_off()
     self.rear_driver.sensor_power_off()
+
+  def get_counters(self):
+    """
+    returns: counts of wheel sensor changes in order [ front left, front right, rear left, rear right
+    """
+    counter_fl = self.front_driver.get_sensor_counter(MotorDriverBlock.motor1_id)
+    counter_fr = self.front_driver.get_sensor_counter(MotorDriverBlock.motor2_id)
+    counter_rl = self.rear_driver.get_sensor_counter(MotorDriverBlock.motor1_id)
+    counter_rr = self.rear_driver.get_sensor_counter(MotorDriverBlock.motor2_id)
+    return (counter_fl, counter_fr, counter_rl, counter_rr)
+
+  def get_lr_counters(self):
+    """
+    returns: left and right counts of wheel sensor changes
+    """
+    counter_fl, counter_fr, counter_rl, counter_rr = self.get_counters()
+    return (int((counter_fl + counter_rl) / 2), int((counter_fr + counter_rr) / 2))
