@@ -1,4 +1,6 @@
-import planner
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 from block_base import BlockBase
 
 class ExtendedBlockBase(BlockBase):
@@ -26,13 +28,16 @@ class ExtendedBlockBase(BlockBase):
 
   def _ext_write(self, ext_address: int, data: bytes):
     try:
-      self.i2c.writeto(ext_address, data)
+      if ext_address is not None:
+        self.i2c.writeto(ext_address, data)
     except OSError:
       self.logging.error("ext address 0x%02X is unavailable for writing", ext_address)
 
   def _ext_read(self, ext_address: int, in_data: bytes=None, expected_length: int=0):
     self._ext_write(ext_address, in_data)
     try:
+      if ext_address is None:
+        return 0
       return self.i2c.readfrom(ext_address, expected_length, True)
     except OSError:
       self.logging.error("ext address 0x%02X is unavailable for reading", ext_address)

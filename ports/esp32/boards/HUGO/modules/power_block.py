@@ -1,3 +1,6 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 from math import trunc
 from extended_block_base import BlockWithOneExtension
 from active_variable import ActiveVariable
@@ -45,22 +48,30 @@ class PowerBlock(BlockWithOneExtension):
       return -1 #not implemented for this version
 
     state = self._tiny_read(self._charging_state_command, None, 1)
+    if state is None:
+      return 0
     self.logging.info("_get_usb_state: %s, %d", str(state), state[0] >> 1)
     return state[0] >> 1
 
   def _get_charging_state(self) -> int:
     state = self._tiny_read(self._charging_state_command, None, 1)
+    if state is None:
+      return 0
     return state[0] & 1
 
   def _get_voltage(self) -> float:
     data = self._one_ext_read(self.ina219_busvoltag_command.to_bytes(1, "big", False), 2)
+    if not data:
+      return 0
     raw_voltage = ((data[0] << 8) | data[1]) >> 3
     return  raw_voltage * 0.004 #LSB = 4 mV
 
   def _get_current_ma(self) -> float:
     data = self._one_ext_read(self.ina219_shunt_voltage_command.to_bytes(1, "big", False), 2)
+    if not data:
+      return 0
     raw_voltage = (data[0] << 8) | data[1]
     if data[0] & 0x80:
-      self.logging.info("curren raw", raw_voltage)
+      #self.logging.info("curren raw", raw_voltage)
       raw_voltage = ((raw_voltage - 1) ^ 0xffff) * -1
     return raw_voltage * (0.01 / self.shunt_r) #LSB = 10 uV

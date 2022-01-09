@@ -1,4 +1,7 @@
-import planner
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
+from planner import Planner
 from logging import Logging
 
 class Conditions():
@@ -22,8 +25,8 @@ class ActiveVariable():
   def change_period(self, new_period):
     self._renew_period = new_period
     if self._renew_handle:
-      planner.kill(self._renew_handle)
-    self._renew_handle = planner.repeat(self._renew_period, self._update_value)
+      Planner.kill(self._renew_handle)
+    self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
 
   def set_value(self, value):
     old_value = self._value
@@ -74,7 +77,7 @@ class ActiveVariable():
 
   def _add_listener(self, listener):
     if not self._listeners and self._renew_period:
-      self._renew_handle = planner.repeat(self._renew_period, self._update_value)
+      self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
     self._listeners.append(listener)
     self._handle_count += 1
 
@@ -83,7 +86,7 @@ class ActiveVariable():
       if listener[0] == handle:
         self._listeners.remove(listener)
         if not self._listeners:
-          planner.kill(self._renew_handle)
+          Planner.kill(self._renew_handle)
           self._renew_handle = None
         return True
     return False
