@@ -1,3 +1,6 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 import ssd1306
 import uasyncio
 import math
@@ -7,7 +10,7 @@ from active_variable import ActiveVariable
 class DisplayBlock(BlockWithOneExtension):
   _get_dimmensions_command = 0x03
 
-  def __init__(self, address, invert=False):
+  def __init__(self, address=None, invert=False):
     super().__init__(self.type_display, address)
 
     dimensions = self.get_dimensions()
@@ -70,8 +73,7 @@ class DisplayBlock(BlockWithOneExtension):
     uasyncio.create_task(self._async_contrast(value))
 
   async def _async_showtime(self):
-    async with self.i2c_lock:
-      self._display.show()
+    self._display.show()
 
   def showtime(self):
     uasyncio.create_task(self._async_showtime())
@@ -91,18 +93,24 @@ class DisplayBlock(BlockWithOneExtension):
   def fill_rect(self, x0, y0, width, height, color=1):
     self._display.fill_rect(x0, y0, width, height, color)
 
-  def draw_elipse(self, x, y, r1, r2, color=1):
-    for pos in range(0, r1):
-      normalized = pos / r1
-      val = int(round(math.sqrt(1.0 - normalized * normalized) * r2, 0))
+  def draw_ellipse(self, x, y, rh, rv, color=1):
+    """
+    @param x: x center coordinate
+    @param y: y center coordinate
+    @param rh: horizontal radius
+    @param rv vertical radius
+    """
+    for pos in range(0, rh):
+      normalized = pos / rh
+      val = int(round(math.sqrt(1.0 - normalized * normalized) * rv, 0))
       self._display.pixel(x + pos, y - val, color)
       self._display.pixel(x - pos, y - val, color)
       self._display.pixel(x + pos, y + val, color)
       self._display.pixel( x - pos, y + val, color)
 
-    for pos in range(0, r2):
-      normalized = pos / r2
-      val = int(round(math.sqrt(1.0 - normalized * normalized) * r1, 0))
+    for pos in range(0, rv):
+      normalized = pos / rv
+      val = int(round(math.sqrt(1.0 - normalized * normalized) * rh, 0))
       self._display.pixel(x + val, y - pos, color);
       self._display.pixel(x - val, y - pos, color);
       self._display.pixel(x + val, y + pos, color);

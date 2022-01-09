@@ -1,3 +1,6 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 from block_base import BlockBase
 from active_variable import ActiveVariable
 
@@ -47,7 +50,7 @@ class RgbLedBlock(BlockBase):
     RgbLedBlockColor.violet
   )
 
-  def __init__(self, address):
+  def __init__(self, address=None):
     super().__init__(self.type_rgb, address)
     self.state = ActiveVariable(False)
 

@@ -1,18 +1,33 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 import machine
-import planner
+import gc
+from planner import Planner
 from ble import Ble
 
-ble = Ble()
+class MainBlock:
+  @staticmethod
+  def _reboot():
+    machine.reset()
 
-def _reboot():
-  machine.reset()
+  @classmethod
+  def reboot(cls):
+    print("rebooting")
+    Ble.disconnect()
+    Planner.postpone(0.1, cls._reboot)
 
-def reboot():
-  print("rebooting")
-  ble.disconnect()
-  planner.postpone(0.1, _reboot)
+  @staticmethod
+  def get_mem_info():
+      free = gc.mem_free()
+      allocated = gc.mem_alloc()
+      total = free + allocated
+      percent = "{0:.2f} %".format(free /  total * 100)
+      return "Free mem: {0} ({1})".format(free, percent)
 
-def run():
-  ble.get_shell().load_events()
-  planner.run()
-  print("program terminated")
+  @staticmethod
+  def run():
+    Ble.init()
+    Ble.get_shell().load_events()
+    Planner.run()
+    print("program terminated")
