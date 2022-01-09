@@ -1,5 +1,8 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 from logging import Logging
-import planner
+from planner import Planner
 
 class KeyCallback:
   def __init__(self, trigger, callback_method, *args, **kwargs) -> None:
@@ -22,7 +25,7 @@ class VirtualKeyboard():
     for callback in self.callbacks:
       #self.logging.info(str(("trigger:", callback.trigger, "key_name", key_name, callback.trigger == key_name)))
       if callback.trigger in (scan_code, key_name):
-        planner.plan(callback.callback_method, *callback.args, **callback.kwargs)
+        Planner.plan(callback.callback_method, *callback.args, **callback.kwargs)
 
   def add_callback(self, trigger, callback_method, *args, **kwargs):
     """

@@ -1,8 +1,11 @@
+#  Copyright (c) 2022 Jakub Vesely
+#  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
+
 import os
 import hashlib
 from logging import Logging
-import main_block
-import planner
+from main_block import MainBlock
+from planner import Planner
 class Shell():
   _cmd_version               = 0x80
   _cmd_stop_program          = 0x81
@@ -41,7 +44,7 @@ class Shell():
     os.rename(orig_file_path, dest_file_path)
 
   def _reboot(self):
-    main_block.reboot()
+    MainBlock.reboot()
 
   def _import_events(self):
     try:
@@ -80,7 +83,6 @@ class Shell():
     return sha1.digest()
 
   def command_request(self, data):
-    #print(("command_request", data))
     if data and len(data) > 0:
         command = data[0]
         if command == self._cmd_version:
@@ -89,7 +91,7 @@ class Shell():
         elif command == self._cmd_stop_program:
           if self.file_exists(self.events_file_name):
             self.rename_file(self.events_file_name, "." + self.events_file_name)
-          planner.postpone(0.1, self._reboot)
+          Planner.postpone(0.1, self._reboot)
           return self._b_true
 
         elif command == self._cmd_start_program:
