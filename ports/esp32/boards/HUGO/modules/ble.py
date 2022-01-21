@@ -3,12 +3,12 @@
 
 from micropython import const
 import bluetooth
+import sys
 import struct
 from logging import Logging, LoggerBase
 from planner import Planner
 from power_mgmt import PowerMgmt, PowerPlan
-from active_variable import ActiveVariable
-import time
+
 
 _ADV_TYPE_FLAGS = const(0x01)
 _ADV_TYPE_NAME = const(0x09)
@@ -65,8 +65,8 @@ class BleLogger(LoggerBase):
   def _log_to_ble(cls, message):
     Ble.notify_log(message)
 
-  def log(cls, message):
-    Planner.plan(cls._log_to_ble, message)
+  def log(cls, level, message):
+    Planner.plan(cls._log_to_ble, bytes([level]) + message)
 
 class Ble():
   _ble = None
@@ -87,6 +87,7 @@ class Ble():
     Planner.plan(cls._check_time_to_power_save, True)
 
     Logging.add_logger(BleLogger())
+    cls._start_ble() #to be allocated big blocks in the beginning it should prevent memory fragmentation
 
   @classmethod
   def _set_power_save_timeouts(cls, power_plan:PowerPlan):
@@ -98,29 +99,40 @@ class Ble():
 
   @classmethod
   def _check_time_to_power_save(cls, wake_up):
+    #micropython.mem_info(False)
     go_to_power_save = False
-    if wake_up:
-      PowerMgmt.block_power_save()
-      if not cls._time_to_power_save: #can be reset from constructor
-        cls._time_to_power_save = cls._running_time_up
-      cls._start_ble()
-      print("BLE power-save blocked")
-    else:
-      if cls._time_to_power_save: #if time was not reset externally (e.g. ble connection)
-        cls._time_to_power_save -= 1
-        if cls._time_to_power_save == 0: #if time has been reset by decreasing
-          go_to_power_save = True
-          # ble is disabled automatically when power save is activated and is enabled again when the program runs again
-          # but it is not reliable (advertisement si not started) - lets do it manually
-          cls._stop_ble()
-          PowerMgmt.unblock_power_save()
-          print("BLE power-save allowed")
+    try: #to do not be _check_time_to_power_save interupted due to a BLE issue
+      if wake_up:
+        PowerMgmt.block_power_save()
+        if not cls._time_to_power_save: #can be reset from constructor
+          cls._time_to_power_save = cls._running_time_up
+        cls._start_ble()
+        #cls._advertise() #just for sure it is turned on
+
+        print("BLE power-save blocked")
+      else:
+        if cls._time_to_power_save: #if time was not reset externally (e.g. ble connection)
+          cls._time_to_power_save -= 1
+          if cls._time_to_power_save == 0: #if time has been reset by decreasing
+            go_to_power_save = True
+            # ble is disabled automatically when power save is activated and is enabled again when the program runs again
+            # but it is not reliable (advertisement si not started) - lets do it manually
+            #cls.disconnect()
+            cls._stop_ble()
+            PowerMgmt.unblock_power_save()
+            print("BLE power-save allowed")
+
+    except Exception as error:
+      print("BLE error")
+      sys.print_exception(error)
+      #micropython.mem_info(0)
 
     delay = cls._time_down if go_to_power_save else 1
     Planner.postpone(delay, cls._check_time_to_power_save, go_to_power_save)
 
   @classmethod
   def _start_ble(cls):
+    cls._ble = None
     cls._ble = bluetooth.BLE()
     cls._ble.active(True)
     cls._ble.config(rxbuf=_BMS_MTU)
@@ -158,7 +170,6 @@ class Ble():
   def _irq(cls, event, data):
     # Track connections so we can send notifications.
     if event == _IRQ_CENTRAL_CONNECT:
-      cls._time_to_power_save = 0 # disable power save while a connection is active
       conn_handle, _, _ = data
       #NOTE: use when mtu is necessary to change
       connected = False
@@ -166,8 +177,9 @@ class Ble():
         try:
           cls._ble.gattc_exchange_mtu(conn_handle)
           connected =True
+          cls._time_to_power_save = 0 # disable power save while a connection is active
           break
-        except IOError:
+        except Exception:
           print("Error: gattc_exchange_mtu failed")
       if connected:
         cls._connections.add(conn_handle)
@@ -179,7 +191,7 @@ class Ble():
       conn_handle, _, _ = data
       cls._connections.remove(conn_handle)
       if not cls._connections:
-        cls._time_to_power_save = cls._running_time_up # disable power save while a connection is active
+        cls._time_to_power_save = cls._initial_time_up # enable power save with initial time out - to be possible to reconnect
       print("BLE disconnected " + str(conn_handle))
       # Start advertising again to allow a new connection.
       cls._advertise()

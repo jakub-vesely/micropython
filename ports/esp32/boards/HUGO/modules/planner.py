@@ -6,6 +6,8 @@ from power_mgmt import PowerMgmt
 import sys
 import time
 import uasyncio
+import gc
+import micropython
 
 logging = Logging("planner")
 unhandled_exception_prefix = "Unhandled exception"
@@ -30,11 +32,14 @@ class Planner:
 
   @classmethod
   async def _async_plan(cls, handle, function, *args, **kwargs):
-    if not cls._performed_tasks[handle].kill:
+    task = cls._performed_tasks[handle]
+    #PowerMgmt.block_power_save() #just for case a uasyncio.sleep is used in a library
+    if not task.kill:
       try:
         function(*args, **kwargs)
       except Exception as error:
         logging.exception(error, extra_message=unhandled_exception_prefix)
+    #PowerMgmt.unblock_power_save()
     del cls._performed_tasks[handle]
 
   @classmethod
@@ -51,18 +56,22 @@ class Planner:
     task.waiting_time_ms = int(delay_s * 1000)
     while time.ticks_ms() < task.waiting_start_ms + task.waiting_time_ms and not task.kill:
       await uasyncio.sleep_ms(0) # give chance another task
-
-    task.waiting_time_ms = 0
+    if not task.kill:
+      task.waiting_time_ms = 0 #to do not be gone to light_sleep before caller task is finished
 
   @classmethod
   async def _async_postpone(cls, handle, delay_s, function, *args, **kwargs):
+    task = cls._performed_tasks[handle]
     await cls._task_sleep(handle, delay_s)
-    if not cls._performed_tasks[handle].kill:
+    #PowerMgmt.block_power_save()
+    if not task.kill:
       try:
         function(*args, **kwargs)
       except Exception as error:
         logging.exception(error, extra_message=unhandled_exception_prefix)
+    #PowerMgmt.unblock_power_save()
     del cls._performed_tasks[handle]
+
 
   @classmethod
   def postpone(cls, delay_s, function, *args, **kwargs):
@@ -72,13 +81,19 @@ class Planner:
     return handle
   @classmethod
   async def _async_repeat(cls, handle, delay_s, function, *args, **kwargs):
-    if not cls._performed_tasks[handle].kill:
+    task = cls._performed_tasks[handle]
+    if not task.kill:
+      #PowerMgmt.block_power_save()
       try:
         function(*args, **kwargs)
       except Exception as error:
         logging.exception(error, extra_message=unhandled_exception_prefix)
+      #PowerMgmt.unblock_power_save()
       await cls._task_sleep(handle, delay_s) # in case of kill task is created and the kill feature is tested when is executed
+
+      #PowerMgmt.block_power_save() #to will not be lightsleep called now
       cls._loop.create_task(cls._async_repeat(handle, delay_s, function, *args, **kwargs))
+      #PowerMgmt.unblock_power_save()
     else:
       del cls._performed_tasks[handle]
 
@@ -90,25 +105,38 @@ class Planner:
     return handle
 
   @classmethod
+  def _calculate_minimal_remaining_time(cls):
+    now = time.ticks_ms()
+    remains_min = sys.maxsize
+    for properties in cls._performed_tasks.values():
+      if properties.kill:
+        continue
+      remains = properties.waiting_time_ms - (now - properties.waiting_start_ms)
+      #print("remains " + str(remains))
+      if remains < remains_min:
+        remains_min = remains
+    return remains_min
+
+  @classmethod
   async def _async_main(cls):
     while True:
-      now = time.ticks_ms()
-      remains_min = sys.maxsize
-      for properties in cls._performed_tasks.values():
-        if properties.kill or properties.waiting_time_ms == 0: #tasks dedicated to be killed and tasks that do not have set any waiting are skipped
-          continue
-
-        remains = properties.waiting_time_ms - (now - properties.waiting_start_ms)
-        if remains < remains_min:
-          remains_min = remains
-
+      remains_min = cls._calculate_minimal_remaining_time()
       if remains_min == sys.maxsize or remains_min <= 0:
-        await uasyncio.sleep_ms(0)
-      elif not cls._power_mgmt.is_power_save_enabled() or remains_min < 100:
-        await uasyncio.sleep_ms(remains_min)
+        await uasyncio.sleep_ms(10) # to gove chance another task to do what they need
+        continue
+
+      light_sleep_limit = 100
+      if remains_min > light_sleep_limit: #we have plenty of time lets use it for cleaning
+        gc.collect()
+        print(micropython.mem_info())
+        remains_min = cls._calculate_minimal_remaining_time()
+
+      if not cls._power_mgmt.is_power_save_enabled() or remains_min < light_sleep_limit:
+        await uasyncio.sleep_ms(remains_min) #I can asleep this routine, another tasks will still continue
       else:
-        #print("light_sleep for %d ms" % remains_min)
-        cls._power_mgmt.light_sleep(remains_min)
+        print("light_sleep for %d ms" % (remains_min - light_sleep_limit))
+        cls._power_mgmt.light_sleep(remains_min - light_sleep_limit)
+        await uasyncio.sleep_ms(remains_min) #return to another planned tasks
 
   @classmethod
   def run(cls):

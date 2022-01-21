@@ -2,6 +2,7 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 import logging
+from block_types import BlockTypes
 from block_base import BlockBase
 from active_variable import ActiveVariable
 
@@ -28,7 +29,7 @@ class MotorDriverBlock(BlockBase):
   motor2_id = 2
 
   def __init__(self, address=None, get_counter_period=1):
-    super().__init__(self.type_motor_driver, address)
+    super().__init__(BlockTypes.motor_driver, address)
     self.motor1_sensor_counter = ActiveVariable(0, get_counter_period, self._get_sensor_counter_m1)
     self.motor2_sensor_counter = ActiveVariable(0, get_counter_period, self._get_sensor_counter_m2)
 
