@@ -2,16 +2,16 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 import ssd1306
-import uasyncio
 import math
+from block_types import BlockTypes
 from extended_block_base import BlockWithOneExtension
-from active_variable import ActiveVariable
+from micropython import const
+
+_get_dimmensions_command = const(0x03)
 
 class DisplayBlock(BlockWithOneExtension):
-  _get_dimmensions_command = 0x03
-
   def __init__(self, address=None, invert=False):
-    super().__init__(self.type_display, address)
+    super().__init__(BlockTypes.display, address)
 
     dimensions = self.get_dimensions()
 
@@ -24,6 +24,8 @@ class DisplayBlock(BlockWithOneExtension):
       self._display = ssd1306.SSD1306_I2C(dimensions[0], dimensions[1], self.i2c, self.ext_address)
     except Exception as error:
       self.logging.exception(error, extra_message="ssd1306 was not initialized")
+
+    self.contrast(128) # set default contrast somewhere in the middle
 
   def change_extension_address(self, address:int) -> bool:
     if super().change_extension_address(address):
@@ -39,44 +41,29 @@ class DisplayBlock(BlockWithOneExtension):
     """
     returns display dimmensions as tuple (x, y). If dimensions are not provided is returned tuple (0,0)
     """
-    dimensions_data = self._tiny_read(self._get_dimmensions_command, None, 2)
+    dimensions_data = self._tiny_read(_get_dimmensions_command, None, 2)
     return (dimensions_data[0], dimensions_data[1]) if dimensions_data and len(dimensions_data) == 2 else (0, 0)
 
-  async def _async_power_on(self, power_on):
+  def power_on(self, power_on:bool):
     if power_on:
       self._display().poweron()
     else:
       self._display().poweroff()
 
-  def power_on(self, power_on:bool):
-    uasyncio.create_task(self._async_power_on(power_on))
-
-  async def _async_invert(self, invert):
+  def invert(self, invert:bool):
     self._display.invert(invert)
 
-  def invert(self, invert:bool):
-    uasyncio.create_task(self._async_invert(invert))
-
-  async def _async_rotate(self, value:bool):
+  def rotate(self, value:bool):
     self._display.rotate(not value)
 
-  def rotate(self, value:bool):
-    uasyncio.create_task(self._async_rotate(value))
-
-  async def _async_contrast(self, value:int):
+  def contrast(self, value:bool):
     """
     param: contrast in range 0..255
     """
     self._display.contrast(value)
 
-  def contrast(self, value:bool):
-    uasyncio.create_task(self._async_contrast(value))
-
-  async def _async_showtime(self):
-    self._display.show()
-
   def showtime(self):
-    uasyncio.create_task(self._async_showtime())
+    self._display.show()
 
   def clean(self):
     self._display.fill(0)

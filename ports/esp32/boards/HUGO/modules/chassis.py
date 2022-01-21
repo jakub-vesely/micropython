@@ -32,12 +32,12 @@ class Manoeuver:
 
 class Chassis:
   state = {}
-  def __init__(self, address_driver_front, address_driver_rear, addr_power):
+  def __init__(self, address_driver_front, address_driver_rear, addr_power=None, power_measurement_period=1):
     self.speed = Speed.stop
     self.manoeuver = Manoeuver.straight
     self.direction = Direction.forward
     self.logging = Logging("chassis")
-    self.power = PowerBlock(addr_power)
+    self.power = PowerBlock(addr_power, power_measurement_period)
     self.front_driver = MotorDriverBlock(address_driver_front)
     self.rear_driver = MotorDriverBlock(address_driver_rear)
 

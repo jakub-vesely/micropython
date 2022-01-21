@@ -2,30 +2,16 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 from logging import Logging
+from block_types import BlockTypes
 import machine
 import time
+from micropython import const
 
-class BlockType:
-  def __init__(self, type: int, name: str):
-    self.id = type
-    self.name = name
+_get_module_version_command = const(0xf7)
+_change_i2c_address_command =  const(0xfe)
+_i2c_block_type_id_base = const(0xFA)
 
 class BlockBase:
-  type_power = BlockType(0x08, "power_block")
-  type_rgb = BlockType(0x09, "rgb_block")
-  type_motor_driver = BlockType(0x0a, "motor_block")
-  type_display = BlockType(0x0b, "disp_block")
-  type_sound = BlockType(0x0c, "sound_block")
-  type_buttom = BlockType(0x0d, "button_block")
-  type_position = BlockType(0x0e, "position_block")
-  type_ambient = BlockType(0x0f, "ambient_block")
-  # type_id_ir = BlockType(0x10, "ir_block")
-
-  get_module_version_command = 0xf7
-  change_i2c_address_command =  0xfe
-
-  i2c_block_type_id_base = 0xFA
-
   i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
 
   def __init__(self, block_type: int, address: int):
@@ -54,7 +40,7 @@ class BlockBase:
         self.logging.error("tiny-block with address 0x%02X is unavailable for writing", self.address)
 
   def _check_type(self, type_id):
-    return type_id in (self.i2c_block_type_id_base, self.type_id) and (self.i2c_block_type_id_base or self.block_type_valid)
+    return type_id in (_i2c_block_type_id_base, self.type_id) and (_i2c_block_type_id_base or self.block_type_valid)
 
   def __tiny_write_common(self, type_id: int, command: int, data=None):
     """
@@ -69,7 +55,7 @@ class BlockBase:
       self.logging.error("invalid block type - writing interupted")
 
   def _tiny_write_base_id(self, command: int, data=None):
-    self.__tiny_write_common(self.i2c_block_type_id_base, command, data)
+    self.__tiny_write_common(_i2c_block_type_id_base, command, data)
 
   def _tiny_write(self, command: int, data=None):
     self.__tiny_write_common(self.type_id, command, data)
@@ -87,7 +73,6 @@ class BlockBase:
       self._raw_tiny_write(type_id, command, in_data, silent)
       try:
         data = self.i2c.readfrom(self.address, expected_length, True)
-        #self.logging.info(("read", data))
         return data
       except OSError:
         if not silent:
@@ -98,13 +83,13 @@ class BlockBase:
       return None
 
   def _tiny_read_base_id(self, command: int, in_data: bytes=None, expected_length: int=0, silent=False):
-    return self.__tiny_read_common(self.i2c_block_type_id_base, command, in_data, expected_length, silent)
+    return self.__tiny_read_common(_i2c_block_type_id_base, command, in_data, expected_length, silent)
 
   def _tiny_read(self, command: int, in_data: bytes=None, expected_length: int=0):
     return self.__tiny_read_common(self.type_id, command, in_data, expected_length)
 
   def change_block_address(self, new_address):
-    self._tiny_write_base_id(self.change_i2c_address_command, new_address.to_bytes(1, 'big'))
+    self._tiny_write_base_id(_change_i2c_address_command, new_address.to_bytes(1, 'big'))
     self.address = new_address
     time.sleep(0.1) #wait to the change is performed and stopped
 
@@ -112,7 +97,7 @@ class BlockBase:
     """
     returns block_type, pcb version, adjustment_version
     """
-    data = self._tiny_read_base_id(self.get_module_version_command, None, 3, silent=True)
+    data = self._tiny_read_base_id(_get_module_version_command, None, 3, silent=True)
     if not data:
       return None
     return (data[0], data[1], data[2])

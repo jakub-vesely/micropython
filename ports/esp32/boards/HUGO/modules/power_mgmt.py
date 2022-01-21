@@ -5,6 +5,7 @@ import machine
 #from logging import Logging
 
 class BlePowerPlan:
+
   def __init__(self, initial_time_up, running_time_up, time_down) -> None:
     """
     @param param initial_time_up: defines how long will be ble preserve from power saving (this time allow faster and more reliable programming)
@@ -31,14 +32,21 @@ class PowerPlan:
       self.frequency = frequency
       self.ble_plan = ble_plan
 
-class PowerPlans:
-  plan_max_performance = PowerPlan(False, PowerPlan.freq_max, BlePowerPlan(0, 0, 0))
-  plan_balanced = PowerPlan(True, PowerPlan.freq_medium, BlePowerPlan(90, 3, 15))
-  plan_power_saving = PowerPlan(True, PowerPlan.freq_min, BlePowerPlan(30, 1, 60))
+  @staticmethod
+  def get_max_performance_plan():
+    return PowerPlan(False, PowerPlan.freq_max, BlePowerPlan(0, 0, 0))
+
+  @staticmethod
+  def get_balanced_plan():
+    return PowerPlan(True, PowerPlan.freq_medium, BlePowerPlan(90, 3, 12))
+
+  @staticmethod
+  def get_power_saving_plan():
+    return PowerPlan(True, PowerPlan.freq_min, BlePowerPlan(30, 1, 60))
 
 class PowerMgmt:
   _power_save_block_count = 0 #can be increased/decreased by more modules. power save is blocked when the block count > 0
-  _used_plan = PowerPlans.plan_balanced #FIXME: will be started with maximal frequency is is not called set_plan explicitly
+  _used_plan = PowerPlan.get_balanced_plan() #FIXME: will be started with maximal frequency if is not called set_plan explicitly
   _change_callbacks = list()
   #_start_light_sleep_callbacks = list()
   #_stop_light_sleep_callbacks = list()

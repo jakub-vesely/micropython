@@ -5,27 +5,27 @@ import sys
 import os
 
 class LoggerBase():
-  def log(self, message):
-    raise NotImplementedError
-
-class Logging():
   critical_id = 51
   error_id    = 41
   warning_id  = 31
   info_id     = 21
   debug_id    = 11
-  not_set_i   = 0
+  not_set_id   = 0
 
+  def log(self, level, message):
+    raise NotImplementedError
+
+class Logging():
   loggers = list()
   def __init__(self, tag=""):
-    self.level = self.info_id
+    self.level = LoggerBase.info_id
     self.tag = tag
 
   @staticmethod
   def add_logger(logger):
     Logging.loggers.append(logger)
 
-  def fit(self, msg_length, is_first):
+  def _fit(self, msg_length, is_first):
     len_prefix = 3 + len(self.tag) if is_first else 0  # 2: level + ": "
     return  len_prefix + msg_length < 512 # < MP_BLUETOOTH_DEFAULT_ATTR_LEN ('\f' can be added)
 
@@ -33,15 +33,15 @@ class Logging():
     if level < self.level:
       return
 
-    prefix = bytes([level]) + (self.tag + ": ").encode("utf-8") if has_prefix else b""
+    prefix = (self.tag + ": ").encode("utf-8") if has_prefix else b""
     try:
       complete = prefix + ((message % args) if args else message).encode("utf-8")
     except (AttributeError, TypeError) as error:
       complete = prefix + (str((message, args)) if args else str(message)).encode("utf-8")
     for logger in self.loggers:
-      logger.log(complete)
+      logger.log(level, complete)
 
-  def exception(self, exc, level=error_id, extra_message=None):
+  def exception(self, exc, level=LoggerBase.error_id, extra_message=None):
     if level < self.level:
       return
 
@@ -56,7 +56,7 @@ class Logging():
         if not line:
           break
 
-        if not self.fit(len(content) + len(line), is_first):
+        if not self._fit(len(content) + len(line), is_first):
           content += "\f" # add page separator indicating message continuation to the message reader
           self.log(level, content, has_prefix=is_first)
           content = ""
@@ -67,40 +67,16 @@ class Logging():
     os.remove(file_name)
 
   def debug(self, msg, *args):
-    self.log(self.debug_id, msg, *args)
+    self.log(LoggerBase.debug_id, msg, *args)
 
   def info(self, msg, *args):
-    self.log(self.info_id, msg, *args)
+    self.log(LoggerBase.info_id, msg, *args)
 
   def warning(self, msg, *args):
-    self.log(self.warning_id, msg, *args)
+    self.log(LoggerBase.warning_id, msg, *args)
 
   def error(self, msg, *args):
-    self.log(self.error_id, msg, *args)
+    self.log(LoggerBase.error_id, msg, *args)
 
   def critical(self, msg, *args):
-    self.log(self.critical_id, msg, *args)
-
-class SerialLogger(LoggerBase):
-  critical_str = "C"
-  error_str = "E"
-  warning_str = "W"
-  info_str = "I"
-  debug_str = "D"
-
-  def log(self, message):
-    level = message[0]
-    if level == Logging.critical_id:
-      level_str = self.critical_str
-    elif level == Logging.error_id:
-      level_str = self.error_str
-    elif level == Logging.warning_id:
-      level_str = self.warning_str
-    elif level == Logging.info_id:
-      level_str = self.info_str
-    elif level == Logging.debug_id:
-      level_str = self.debug_str
-
-    print("{0: <1} {1}".format(level_str, message[1:].decode("utf-8")))
-
-#Logging.loggers.append(SerialLogger())
+    self.log(LoggerBase.critical_id, msg, *args)

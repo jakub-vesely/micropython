@@ -2,29 +2,31 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 from block_base import BlockBase
+from micropython import const
+
+_get_ext_count_command =      const(0xf9)
+_get_ext_address_command =    const(0xfa)
+_change_ext_address_command = const(0xfb)
+_get_ext_addr_count_command = const(0xfc)
+_get_ext_addr_list_command =  const(0xfd)
 
 class ExtendedBlockBase(BlockBase):
-  _get_ext_count_command =       0xf9
-  _get_ext_address_command =     0xfa
-  _change_ext_address_command =  0xfb
-  _get_ext_addr_count_command =  0xfc
-  _get_ext_addr_list_command =   0xfd
 
   def get_extension_count(self) -> int:
-    data = self._tiny_read_base_id(self._get_ext_count_command, None, 1)
+    data = self._tiny_read_base_id(_get_ext_count_command, None, 1)
     return data[0]
 
   def get_ext_address_list(self) -> bytes:
-    count_data = self._tiny_read_base_id(self._get_ext_addr_count_command, None, 1)
-    data =  self._tiny_read_base_id(self._get_ext_addr_list_command, None, count_data[0])
+    count_data = self._tiny_read_base_id(_get_ext_addr_count_command, None, 1)
+    data =  self._tiny_read_base_id(_get_ext_addr_list_command, None, count_data[0])
     return list(data)
 
   def get_extension_address(self) -> int:
-    address_data = self._tiny_read_base_id(self._get_ext_address_command, None, 1)
+    address_data = self._tiny_read_base_id(_get_ext_address_command, None, 1)
     return address_data[0] if address_data else None
 
   def change_extension_address(self, address:int) -> bool:
-    return self._tiny_read_base_id(self._change_ext_address_command, bytes([address]), 1)
+    return self._tiny_read_base_id(_change_ext_address_command, bytes([address]), 1)
 
   def _ext_write(self, ext_address: int, data: bytes):
     try:

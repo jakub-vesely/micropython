@@ -6,16 +6,18 @@ import hashlib
 from logging import Logging
 from main_block import MainBlock
 from planner import Planner
-class Shell():
-  _cmd_version               = 0x80
-  _cmd_stop_program          = 0x81
-  _cmd_start_program         = 0x82
-  _cmd_get_next_file_info    = 0x83
-  _cmd_remove_file           = 0x84
-  _cmd_handle_file           = 0x85
-  _cmd_get_file_checksum     = 0x86
-  _cmd_append                = 0x87
+from micropython import const
 
+_cmd_version            = const(0x80)
+_cmd_stop_program       = const(0x81)
+_cmd_start_program      = const(0x82)
+_cmd_get_next_file_info = const(0x83)
+_cmd_remove_file        = const(0x84)
+_cmd_handle_file        = const(0x85)
+_cmd_get_file_checksum  = const(0x86)
+_cmd_append             = const(0x87)
+
+class Shell():
   _b_false = b"\0"
   _b_true = b"\1"
 
@@ -85,19 +87,23 @@ class Shell():
   def command_request(self, data):
     if data and len(data) > 0:
         command = data[0]
-        if command == self._cmd_version:
+        if command == _cmd_version:
           return self._b_true
 
-        elif command == self._cmd_stop_program:
+        elif command == _cmd_stop_program:
+          print("cmd_stop_program")
           if self.file_exists(self.events_file_name):
+            print("events_file will be renamed")
             self.rename_file(self.events_file_name, "." + self.events_file_name)
+            print("events_file renamed")
+          print("reboot planned")
           Planner.postpone(0.1, self._reboot)
           return self._b_true
 
-        elif command == self._cmd_start_program:
+        elif command == _cmd_start_program:
           return self._b_true if self._import_events() else self._b_false
 
-        elif command == self._cmd_get_next_file_info:
+        elif command == _cmd_get_next_file_info:
           if not self.dir_content:
             self.dir_content = os.listdir("/")
           if self.dir_pos >= len(self.dir_content):
@@ -106,20 +112,20 @@ class Shell():
           self.dir_pos += 1
           return self._get_file_checksum(name) + name.encode("utf-8")
 
-        elif command == self._cmd_remove_file:
+        elif command == _cmd_remove_file:
           filename = data[1:]
           self.remove_file(filename)
           return self._b_true
 
-        elif command == self._cmd_handle_file:
+        elif command == _cmd_handle_file:
           self.handeled_file_path = data[1:]
           self.new_file = True
           return self._b_true
 
-        elif command == self._cmd_get_file_checksum:
+        elif command == _cmd_get_file_checksum:
           return self._get_file_checksum(self.handeled_file_path)
 
-        elif command == self._cmd_append:
+        elif command == _cmd_append:
           data = data[1:]
           if self.new_file:
             file = open(self.handeled_file_path, "wb")
