@@ -131,12 +131,12 @@ class Planner:
         print(micropython.mem_info())
         remains_min = cls._calculate_minimal_remaining_time()
 
-      if not cls._power_mgmt.is_power_save_enabled() or remains_min < light_sleep_limit:
+      if not cls._power_mgmt.is_power_save_enabled() or remains_min <= light_sleep_limit:
         await uasyncio.sleep_ms(remains_min) #I can asleep this routine, another tasks will still continue
       else:
         print("light_sleep for %d ms" % (remains_min - light_sleep_limit))
         cls._power_mgmt.light_sleep(remains_min - light_sleep_limit)
-        await uasyncio.sleep_ms(remains_min) #return to another planned tasks
+        await uasyncio.sleep_ms(0) #return to another planned tasks
 
   @classmethod
   def run(cls):

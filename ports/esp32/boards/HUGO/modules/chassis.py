@@ -3,7 +3,7 @@
 
 from motor_driver_block import MotorDriverBlock
 from logging import Logging
-from power_block import PowerBlock
+from power_block import PowerBlock, PowerSaveLevel
 
 class State:
   def __init__(self, left, right, pwm) -> None:
@@ -166,3 +166,8 @@ class Chassis:
     """
     counter_fl, counter_fr, counter_rl, counter_rr = self.get_counters()
     return (int((counter_fl + counter_rl) / 2), int((counter_fr + counter_rr) / 2))
+
+  def power_save(self, level:PowerSaveLevel) -> None:
+    self.power.power_save()
+    self.front_driver.power_save()
+    self.rear_driver.power_save()

@@ -5,9 +5,9 @@ from logging import Logging
 from planner import Planner
 
 class KeyCallback:
-  def __init__(self, trigger, callback_method, *args, **kwargs) -> None:
+  def __init__(self, trigger, callback_type, *args, **kwargs) -> None:
     self.trigger = trigger
-    self.callback_method = callback_method
+    self.callback_type = callback_type
     self.args = args
     self.kwargs = kwargs
 
@@ -25,15 +25,15 @@ class VirtualKeyboard():
     for callback in self.callbacks:
       #self.logging.info(str(("trigger:", callback.trigger, "key_name", key_name, callback.trigger == key_name)))
       if callback.trigger in (scan_code, key_name):
-        Planner.plan(callback.callback_method, *callback.args, **callback.kwargs)
+        Planner.plan(callback.callback_type, *callback.args, **callback.kwargs)
 
-  def add_callback(self, trigger, callback_method, *args, **kwargs):
+  def add_callback(self, trigger, callback_type, *args, **kwargs):
     """
     trigger can be "key name" as string or "scan code" as integer
     """
-    self.callbacks.append(KeyCallback(trigger, callback_method, *args, **kwargs))
+    self.callbacks.append(KeyCallback(trigger, callback_type, *args, **kwargs))
 
-  def del_callback(self, trigger, callback_method):
+  def del_callback(self, trigger, callback_type):
     for callback in self.callbacks:
-      if callback.trigger == trigger and callback.callback_method == callback_method:
+      if callback.trigger == trigger and callback.callback_type == callback_type:
         self.callbacks.remove(callback)

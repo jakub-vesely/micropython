@@ -7,9 +7,16 @@ import machine
 import time
 from micropython import const
 
+_power_save_command = const(0xf6)
 _get_module_version_command = const(0xf7)
 _change_i2c_address_command =  const(0xfe)
 _i2c_block_type_id_base = const(0xFA)
+
+
+class PowerSaveLevel:
+  NoPowerSave = 0    # powersave is off
+  LightPowerSave = 1 # subsystems that are not needed are turned off
+  DeepPowerSave = 2  # all subsystems are turned off
 
 class BlockBase:
   i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
@@ -20,6 +27,10 @@ class BlockBase:
     self.logging = Logging(block_type.name)
     self.block_version = self._get_block_version()
     self.block_type_valid = False
+
+    self.power_save_level = PowerSaveLevel.NoPowerSave
+    self._tiny_write_base_id(_power_save_command, self.power_save_level.to_bytes(1, 'big')) #wake up block functionality
+
     if not self.block_version:
       self.logging.warning("module with address 0x%x is not available", self.address)
     elif self.block_version[0] != self.type_id:
@@ -104,3 +115,7 @@ class BlockBase:
 
   def is_available(self):
     return self.block_version is not None
+
+  def power_save(self, level:PowerSaveLevel) -> None:
+    self.power_save_level = level
+    self._tiny_write_base_id(_power_save_command, level.to_bytes(1, 'big'))

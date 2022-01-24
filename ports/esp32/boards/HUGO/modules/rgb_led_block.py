@@ -68,7 +68,10 @@ class RgbLedBlock(BlockBase):
     )
     self.state.set_value(red or green or blue)
 
-  def set_color(self, index: int, ):
+  def set_color(self, color: RgbLedBlockColor):
+    self.set_rgb(color.red, color.green, color.blue)
+
+  def set_color_index(self, index: int):
     if index < len(self.colors):
       self.set_rgb(self.colors[index].red, self.colors[index].green, self.colors[index].blue)
 

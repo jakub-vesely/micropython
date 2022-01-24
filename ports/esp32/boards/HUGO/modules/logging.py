@@ -30,7 +30,7 @@ class Logging():
     return  len_prefix + msg_length < 512 # < MP_BLUETOOTH_DEFAULT_ATTR_LEN ('\f' can be added)
 
   def log(self, level, message, *args, has_prefix=True):
-    if level < self.level:
+    if level < self.level or not self.loggers:
       return
 
     prefix = (self.tag + ": ").encode("utf-8") if has_prefix else b""
