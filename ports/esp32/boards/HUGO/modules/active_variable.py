@@ -11,13 +11,20 @@ class Conditions():
   in_range = 4
   out_of_range = 5
   value_changed = 6
+  value_updated = 6
 
 class ActiveVariable():
   logging = Logging("act_var")
-  def __init__(self, initial_value, renew_period=0, renew_method=None):
+  def __init__(self, initial_value=None, renew_period=0, renew_type=None):
+    """
+    @param initial_value: if is set Active variable will be preset to this value
+    @param renew_period: renew_type will be called with this period if this value > 0
+    @param renew_type: this method will be called periodically if renew_period is > 0 or if get_value is called with the parameter "force"
+    """
+
     self._value = initial_value
     self._renew_period = renew_period
-    self._renew_method = renew_method
+    self._renew_type = renew_type
     self._renew_handle = None
     self._listeners = list()
     self._handle_count = 0
@@ -26,7 +33,9 @@ class ActiveVariable():
     self._renew_period = new_period
     if self._renew_handle:
       Planner.kill(self._renew_handle)
-    self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
+      self._renew_handle = None
+    if self._renew_period > 0:
+      self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
 
   def set_value(self, value):
     old_value = self._value
@@ -60,6 +69,9 @@ class ActiveVariable():
         if value != old_value:
           listener[3](*listener[4], **listener[5])
           processed = True
+      elif _type == Conditions.value_updated:
+        listener[3](*listener[4], **listener[5])
+        processed = True
       else:
         self.logging.error("unknown listener type %s" % str(listener[1]))
 
@@ -72,14 +84,15 @@ class ActiveVariable():
     return self._value
 
   def _update_value(self):
-    if self._renew_method:
-      self.set_value(self._renew_method())
+    if self._renew_type:
+      self.set_value(self._renew_type())
 
   def _add_listener(self, listener):
-    if not self._listeners and self._renew_period:
+    if not self._listeners and self._renew_period > 0:
       self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
     self._listeners.append(listener)
     self._handle_count += 1
+    return listener[0]
 
   def remove_trigger(self, handle):
     for listener in self._listeners:
@@ -91,26 +104,23 @@ class ActiveVariable():
         return True
     return False
 
-  def equal_to_trigger(self, expected, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.equal_to, repetitive, expected, function, args, kwargs))
-    return self._handle_count
+  def equal_to(self, expected, repetitive, function, *args, **kwargs):
+    return self._add_listener((self._handle_count, Conditions.equal_to, repetitive, expected, function, args, kwargs))
 
-  def less_than_trigger(self, expected, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.less_than, repetitive, expected, function, args, kwargs))
-    return self._handle_count
+  def less_than(self, expected, repetitive, function, *args, **kwargs):
+    return self._add_listener((self._handle_count, Conditions.less_than, repetitive, expected, function, args, kwargs))
 
   def more_than(self, expected, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.more_than, repetitive, expected, function, args, kwargs))
-    return self._handle_count
+    return self._add_listener((self._handle_count, Conditions.more_than, repetitive, expected, function, args, kwargs))
 
   def in_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.in_range, repetitive, expected_min, expected_max, function, args, kwargs))
-    return self._handle_count
+    return self._add_listener((self._handle_count, Conditions.in_range, repetitive, expected_min, expected_max, function, args, kwargs))
 
   def out_of_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.out_of_range, repetitive, expected_min, expected_max, function, args, kwargs))
-    return self._handle_count
+    return self._add_listener((self._handle_count, Conditions.out_of_range, repetitive, expected_min, expected_max, function, args, kwargs))
 
   def changed(self, repetitive, function, *args, **kwargs):
-    self._add_listener((self._handle_count, Conditions.value_changed, repetitive, function, args, kwargs))
-    return self._handle_count
+    return self._add_listener((self._handle_count, Conditions.value_changed, repetitive, function, args, kwargs))
+
+  def updated(self, repetitive, function, *args, **kwargs):
+    return self._add_listener((self._handle_count, Conditions.value_updated, repetitive, function, args, kwargs))

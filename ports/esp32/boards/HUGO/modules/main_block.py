@@ -31,3 +31,7 @@ class MainBlock:
     Ble.get_shell().load_events()
     Planner.run()
     print("program terminated")
+
+  @staticmethod
+  def power_save() -> None:
+    pass #TODO: is here anything to do?

@@ -5,6 +5,7 @@ import ssd1306
 import math
 from block_types import BlockTypes
 from extended_block_base import BlockWithOneExtension
+
 from micropython import const
 
 _get_dimmensions_command = const(0x03)
