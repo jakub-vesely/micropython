@@ -16,10 +16,9 @@ class DisplayBlock(BlockWithOneExtension):
 
     dimensions = self.get_dimensions()
 
-    if not self.ext_address:
-      self.logging.error("display is not available")
-      self._display = None
-      return
+    self._display = None
+    if not self.is_available():
+      return #doesn't make sense to initialize extension - block is not inserted
 
     try:
       self._display = ssd1306.SSD1306_I2C(dimensions[0], dimensions[1], self.i2c, self.ext_address)
@@ -29,7 +28,7 @@ class DisplayBlock(BlockWithOneExtension):
     self.contrast(128) # set default contrast somewhere in the middle
 
   def change_extension_address(self, address:int) -> bool:
-    if super().change_extension_address(address):
+    if super().change_extension_address(address) and self._display:
       self._display.addr = address
       return True
     else:
@@ -46,40 +45,52 @@ class DisplayBlock(BlockWithOneExtension):
     return (dimensions_data[0], dimensions_data[1]) if dimensions_data and len(dimensions_data) == 2 else (0, 0)
 
   def power_on(self, power_on:bool):
+    if not self._display:
+      return
+
     if power_on:
       self._display().poweron()
     else:
       self._display().poweroff()
 
   def invert(self, invert:bool):
-    self._display.invert(invert)
+    if self._display:
+      self._display.invert(invert)
 
   def rotate(self, value:bool):
-    self._display.rotate(not value)
+    if self._display:
+      self._display.rotate(not value)
 
   def contrast(self, value:bool):
     """
     param: contrast in range 0..255
     """
-    self._display.contrast(value)
+    if self._display:
+      self._display.contrast(value)
 
   def showtime(self):
-    self._display.show()
+    if self._display:
+      self._display.show()
 
   def clean(self):
-    self._display.fill(0)
+    if self._display:
+      self._display.fill(0)
 
   def draw_point(self, x, y, color=1):
-    self._display.pixel(x, y, color)
+    if self._display:
+      self._display.pixel(x, y, color)
 
   def draw_line(self, x0, y0, x1, y1, color=1):
-    self._display.line(x0, y0, x1,y1, color)
+    if self._display:
+      self._display.line(x0, y0, x1,y1, color)
 
   def draw_rect(self, x0, y0, width, height, color=1):
-    self._display.rect(x0, y0, width, height, color)
+    if self._display:
+      self._display.rect(x0, y0, width, height, color)
 
   def fill_rect(self, x0, y0, width, height, color=1):
-    self._display.fill_rect(x0, y0, width, height, color)
+    if self._display:
+      self._display.fill_rect(x0, y0, width, height, color)
 
   def draw_ellipse(self, x, y, rh, rv, color=1):
     """
@@ -88,6 +99,9 @@ class DisplayBlock(BlockWithOneExtension):
     @param rh: horizontal radius
     @param rv vertical radius
     """
+    if not self._display:
+      return
+
     for pos in range(0, rh):
       normalized = pos / rh
       val = int(round(math.sqrt(1.0 - normalized * normalized) * rv, 0))
@@ -105,4 +119,5 @@ class DisplayBlock(BlockWithOneExtension):
       self._display.pixel(x - val, y + pos, color);
 
   def print_text(self, x0, y0, text, color=1):
-    self._display.text(text, x0, y0, color)
+    if self._display:
+      self._display.text(text, x0, y0, color)

@@ -16,4 +16,4 @@ class ButtonBlock(BlockBase):
 
   def _is_pressed(self):
     data =  self._tiny_read(_is_pressed_command, None, 1)
-    return False if data[0] else True #negative logic
+    return False if not data or data[0] else True #negative logic

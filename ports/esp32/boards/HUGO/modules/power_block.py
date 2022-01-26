@@ -43,11 +43,16 @@ class PowerBlock(BlockWithOneExtension):
     self._ina_init()
 
   def _ina_init(self):
+    if not self.ext_address:
+      return
     data = _config.to_bytes(2, 'big', False)
     data = _ina219_configuration_command.to_bytes(1, "big", False) + data
     self._one_ext_write(data)
 
   def _get_usb_state(self) -> int:
+    if not self.ext_address:
+      return 0
+
     if self.block_version[1] < 2 and self.block_version[2] < 1:
       return -1 #not implemented for this version
 
@@ -58,6 +63,9 @@ class PowerBlock(BlockWithOneExtension):
     return state[0] >> 1
 
   def _get_charging_state(self) -> int:
+    if not self.ext_address:
+      return 0
+
     state = self._tiny_read(_charging_state_command, None, 1)
     if state is None:
       return 0

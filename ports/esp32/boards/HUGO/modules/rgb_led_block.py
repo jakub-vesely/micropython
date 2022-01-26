@@ -3,7 +3,6 @@
 
 from block_types import BlockTypes
 from block_base import BlockBase
-from active_variable import ActiveVariable
 
 class RgbLedBlockCommand():
     set_rgb = 1 # followed by 3 bytes (RGB)
@@ -53,10 +52,10 @@ class RgbLedBlock(BlockBase):
 
   def __init__(self, address=None):
     super().__init__(BlockTypes.rgb, address)
-    self.state = ActiveVariable(False)
+    self.state = False
 
   def toggle(self):
-    if self.state.get_value():
+    if self.state:
       self.set_off()
     else:
       self.set_on()
@@ -66,7 +65,7 @@ class RgbLedBlock(BlockBase):
         RgbLedBlockCommand.set_rgb,
         red.to_bytes(1, 'big') + green.to_bytes(1, 'big') + blue.to_bytes(1, 'big')
     )
-    self.state.set_value(red or green or blue)
+    self.state = (red or green or blue)
 
   def set_color(self, color: RgbLedBlockColor):
     self.set_rgb(color.red, color.green, color.blue)
