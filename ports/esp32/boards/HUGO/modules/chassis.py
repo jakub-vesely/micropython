@@ -3,7 +3,8 @@
 
 from motor_driver_block import MotorDriverBlock
 from logging import Logging
-from power_block import PowerBlock, PowerSaveLevel
+from power_block import PowerBlock
+from block_base import PowerSaveLevel
 
 class State:
   def __init__(self, left, right, pwm) -> None:
@@ -58,12 +59,12 @@ class Chassis:
     driver.set_pwm_period(pwm)
 
   def _set_values(self, l_speed, r_speed, pwm):
-    self.logging.info("l_speed: {0}, r_speed: {1}, pwm: {2}".format(l_speed, r_speed, pwm))
+    #self.logging.info("l_speed: {0}, r_speed: {1}, pwm: {2}".format(l_speed, r_speed, pwm))
     self._set_driver_values(self.front_driver, l_speed, r_speed, pwm)
     self._set_driver_values(self.rear_driver, l_speed, r_speed, pwm)
 
   def _adjust_movement(self):
-    self.logging.info("direction: {0}, speed: {1}, manoeuver: {2}".format(self.direction, self.speed, self.manoeuver))
+    #self.logging.info("direction: {0}, speed: {1}, manoeuver: {2}".format(self.direction, self.speed, self.manoeuver))
     if self.speed == Speed.fast:
       if self.manoeuver == Manoeuver.rotate_left:
         self._set_values(l_speed=90, r_speed=-90, pwm=50)
