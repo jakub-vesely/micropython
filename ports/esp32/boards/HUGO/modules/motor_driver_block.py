@@ -78,7 +78,7 @@ class MotorDriverBlock(BlockBase):
       speed = 0
     if speed > 100:
       speed = 100
-    self.logging.info("motor_id", motor_id, "speed", speed)
+    #self.logging.info("motor_id", motor_id, "speed", speed)
     self._send_simple_command(self.set_speed_command, motor_id, speed.to_bytes(1, "big", False))
 
   def set_pwm_period(self, period):
