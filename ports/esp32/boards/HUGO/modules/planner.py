@@ -44,6 +44,10 @@ class Planner:
 
   @classmethod
   def plan(cls, function, *args, **kwargs):
+    """
+    Plans the task to be executed within the task loop
+    The function name have to be placed without brackets to do not be called instead of storing
+    """
     handle = cls._get_next_handle()
     cls._performed_tasks[handle] = TaskProperties()
     cls._loop.create_task(cls._async_plan(handle, function, *args, **kwargs))
@@ -75,10 +79,15 @@ class Planner:
 
   @classmethod
   def postpone(cls, delay_s, function, *args, **kwargs):
+    """
+    Plans the task to be executed with the defined delay
+    The function name have to be placed without brackets to do not be called instead of storing
+    """
     handle = cls._get_next_handle()
     cls._performed_tasks[handle] = TaskProperties()
     cls._loop.create_task(cls._async_postpone(handle, delay_s, function, *args, **kwargs))
     return handle
+
   @classmethod
   async def _async_repeat(cls, handle, delay_s, function, *args, **kwargs):
     task = cls._performed_tasks[handle]
@@ -99,6 +108,10 @@ class Planner:
 
   @classmethod
   def repeat(cls, delay_s, function, *args, **kwargs):
+    """
+    Plans the task to be repeated with the defined period, first call will be planned without the delay
+    The function name have to be placed without brackets to do not be called instead of storing
+    """
     handle = cls._get_next_handle()
     cls._performed_tasks[handle] = TaskProperties()
     cls._loop.create_task(cls._async_repeat(handle, delay_s, function, *args, **kwargs))
@@ -140,9 +153,18 @@ class Planner:
 
   @classmethod
   def run(cls):
+    """
+    Starts the planner. this method is called automatically when the program starts
+    """
     cls._loop.run_until_complete(cls._async_main())
 
   @classmethod
   def kill_task(cls, handle):
+    """
+    Kills planned task to will not be performed or repeated. Returns True if the task was found and marked as killed, False otherwise.
+    """
     if handle in cls._performed_tasks:
       cls._performed_tasks[handle].kill = True
+      return True
+    return False
+
