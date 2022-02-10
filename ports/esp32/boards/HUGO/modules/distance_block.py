@@ -17,7 +17,7 @@ class DistanceBlock(BlockWithOneExtension):
     """
     super().__init__(BlockTypes.distance, address)
     #self.is_usb_connected = ActiveVariable(False, measurement_period, self._get_usb_state)
-    self.distance = ActiveVariable(0, measurement_period, self._get_distance)
+    self.value = ActiveVariable(0, measurement_period, self._get_distance)
 
     #doesn't make sense to initialize extension when the block is not inserted
     self._vl53l1 = VL53L1X(self.i2c, self.ext_address) if self.is_available() else None

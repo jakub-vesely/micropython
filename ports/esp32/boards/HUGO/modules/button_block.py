@@ -12,7 +12,7 @@ class ButtonBlock(BlockBase):
 
   def __init__(self, address=None, measurement_period: float=0.1):
     super().__init__(BlockTypes.buttom, address)
-    self.is_pressed = ActiveVariable(False, measurement_period, self._is_pressed)
+    self.value = ActiveVariable(False, measurement_period, self._is_pressed)
 
   def _is_pressed(self):
     data =  self._tiny_read(_is_pressed_command, None, 1)
