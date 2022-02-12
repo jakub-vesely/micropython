@@ -1,14 +1,17 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
+#pylint: disable=no-name-in-module ;implemented in micropython
 from micropython import const
+#pylint: disable=import-error ;implemented in micropython
 import bluetooth
 import sys
 import struct
 from logging import Logging, LoggerBase
 from planner import Planner
 from power_mgmt import PowerMgmt, PowerPlan
-
+from active_variable import ActiveVariable
+from remote_control.remote_key import RemoteKey
 
 _ADV_TYPE_FLAGS = const(0x01)
 _ADV_TYPE_NAME = const(0x09)
@@ -59,14 +62,14 @@ _HUGO_SERVICE = (
 _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 
 class BleLogger(LoggerBase):
-  def __init__(cls):
+  def __init__(self):
     super().__init__()
 
-  def _log_to_ble(cls, message):
+  def _log_to_ble(self, message):
     Ble.notify_log(message)
 
-  def log(cls, level, message):
-    Planner.plan(cls._log_to_ble, bytes([level]) + message)
+  def log(self, level, message):
+    Planner.plan(self._log_to_ble, bytes([level]) + message)
 
 class Ble():
   _ble = None
@@ -79,7 +82,7 @@ class Ble():
   _running_time_up = None
   _time_down = None
   _time_to_power_save = None
-
+  value_remote: ActiveVariable = None
   @classmethod
   def init(cls) -> None:
     PowerMgmt.register_management_change_callback(cls._set_power_save_timeouts)
@@ -88,6 +91,8 @@ class Ble():
 
     Logging.add_logger(BleLogger())
     cls._start_ble() #to be allocated big blocks in the beginning it should prevent memory fragmentation
+    cls.value_remote = ActiveVariable(RemoteKey.get_default())
+
 
   @classmethod
   def _set_power_save_timeouts(cls, power_plan:PowerPlan):
@@ -124,6 +129,7 @@ class Ble():
 
     except Exception as error:
       print("BLE error")
+      #pylint: disable=no-member ;implemented in micropython
       sys.print_exception(error)
       #micropython.mem_info(0)
 
@@ -160,13 +166,6 @@ class Ble():
     return cls._shell
 
   @classmethod
-  def get_keyboard(cls):
-    if not cls._keyboard:
-      from virtual_keyboard import VirtualKeyboard
-      cls._keyboard = VirtualKeyboard()
-    return cls._keyboard
-
-  @classmethod
   def _irq(cls, event, data):
     # Track connections so we can send notifications.
     if event == _IRQ_CENTRAL_CONNECT:
@@ -196,7 +195,7 @@ class Ble():
       # Start advertising again to allow a new connection.
       cls._advertise()
     elif event == _IRQ_GATTS_INDICATE_DONE:
-      conn_handle, value_handle, status = data
+      conn_handle, value_handle, _status = data
 
     elif event == _IRQ_GATTS_WRITE:
       conn_handle, value_handle = data
@@ -208,8 +207,15 @@ class Ble():
           cls._ble.gatts_notify(conn_handle, value_handle, ret_data)
 
       if value_handle == cls._keyboard_handle:
-          keyboard = cls.get_keyboard()
-          keyboard.process_input(value)
+        print("_keyboard_handle")
+        if not cls._keyboard:
+          from remote_control.virtual_keyboard import VirtualKeyboard
+          cls._keyboard = VirtualKeyboard()
+
+        scan_code = int.from_bytes(value[0:2], "big", True)
+        key_name = value[2:].decode("utf-8")
+        print("scan_code: %s, key_name: %s", str(scan_code), str(key_name))
+        cls.value_remote.set(RemoteKey(key_name, scan_code, cls._keyboard.get_address()))
     elif event == _IRQ_MTU_EXCHANGED:
       pass
     else:
@@ -220,8 +226,8 @@ class Ble():
     payload = bytearray()
 
     def _append(adv_type, value):
-        nonlocal payload
-        payload += struct.pack("BB", len(value) + 1, adv_type) + value
+      nonlocal payload
+      payload += struct.pack("BB", len(value) + 1, adv_type) + value
 
     _append(
         _ADV_TYPE_FLAGS,
@@ -229,14 +235,14 @@ class Ble():
     )
 
     if name:
-        _append(_ADV_TYPE_NAME, name)
+      _append(_ADV_TYPE_NAME, name)
 
     if services:
-       _append(_ADV_TYPE_UUID16_COMPLETE, b"HuGo")
+      _append(_ADV_TYPE_UUID16_COMPLETE, b"HuGo")
 
     # See org.bluetooth.characteristic.gap.appearance.xml
     if appearance:
-        _append(_ADV_TYPE_APPEARANCE, struct.pack("<h", appearance))
+      _append(_ADV_TYPE_APPEARANCE, struct.pack("<h", appearance))
 
     return payload
 

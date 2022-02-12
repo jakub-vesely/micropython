@@ -1,8 +1,33 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from logging import Logging
 from planner import Planner
+from logging import Logging
+class SpecialKeys:
+  left = "left"
+  right = "right"
+  top = "top"
+  bottom = "bottom"
+  space = "space"
+  delete = "delete"
+  backspace = "backspace"
+  enter = "enter"
+  page_up = "page up"
+  page_down = "page down"
+  home = "home"
+  end = "end"
+  ctrl = "ctrl"
+  right_ctrl = "right ctrl"
+  alt = "alt"
+  right_alt = "right alt"
+  window = "left windows"
+  menu = "menu"
+  caps_lock = "caps lock"
+  tab = "tab"
+  shift = "shift"
+  right_shift = "right_shift"
+  insert = "insert"
+  pause = "pause"
 
 class KeyCallback:
   def __init__(self, trigger, callback_type, *args, **kwargs) -> None:
@@ -11,29 +36,27 @@ class KeyCallback:
     self.args = args
     self.kwargs = kwargs
 
+logging = Logging("vk")
+
 class VirtualKeyboard():
-  def __init__(self):
-    self.logging = Logging("keybrd")
-    self.callbacks = []
+  callbacks = []
 
-  def process_input(self, input):
-    #self.logging.info("%s, %s", "keyboard_input1", input)
-    scan_code = int.from_bytes(input[0:2], "big", True)
-    key_name = input[2:].decode("utf-8")
-    #self.logging.info("scan_code: %d, key_name: %s, %d", scan_code, key_name, len(self.callbacks))
-
-    for callback in self.callbacks:
-      #self.logging.info(str(("trigger:", callback.trigger, "key_name", key_name, callback.trigger == key_name)))
-      if callback.trigger in (scan_code, key_name):
+  @classmethod
+  def process_input(cls, key_name:str = None, scan_code:bytes = None):
+    logging.info("key:%s", key_name)
+    for callback in cls.callbacks:
+      if callback.trigger in (key_name, scan_code):
         Planner.plan(callback.callback_type, *callback.args, **callback.kwargs)
 
-  def add_callback(self, trigger, callback_type, *args, **kwargs):
+  @classmethod
+  def add_callback(cls, trigger: callable, callback_type, *args, **kwargs):
     """
     trigger can be "key name" as string or "scan code" as integer
     """
-    self.callbacks.append(KeyCallback(trigger, callback_type, *args, **kwargs))
+    cls.callbacks.append(KeyCallback(trigger, callback_type, *args, **kwargs))
 
-  def del_callback(self, trigger, callback_type):
-    for callback in self.callbacks:
+  @classmethod
+  def del_callback(cls, trigger, callback_type):
+    for callback in cls.callbacks:
       if callback.trigger == trigger and callback.callback_type == callback_type:
-        self.callbacks.remove(callback)
+        cls.callbacks.remove(callback)

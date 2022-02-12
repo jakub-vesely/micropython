@@ -141,7 +141,7 @@ class Planner:
       light_sleep_limit = 100
       if remains_min > light_sleep_limit: #we have plenty of time lets use it for cleaning
         gc.collect()
-        print(micropython.mem_info())
+        #print(micropython.mem_info())
         remains_min = cls._calculate_minimal_remaining_time()
 
       if not cls._power_mgmt.is_power_save_enabled() or remains_min <= light_sleep_limit:

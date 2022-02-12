@@ -5,10 +5,10 @@ from block_types import BlockTypes
 from block_base import BlockBase
 
 class RgbLedBlockCommand():
-    set_rgb = 1 # followed by 3 bytes (RGB)
-    set_color = 2 # foloowd by the color code
-    set_on = 3
-    set_off = 4
+  set_rgb = 1 # followed by 3 bytes (RGB)
+  set_color = 2 # foloowd by the color code
+  set_on = 3
+  set_off = 4
 
 class Rgb():
   def __init__(self, red, green, blue) -> None:
@@ -70,7 +70,7 @@ class RgbLedBlock(BlockBase):
   def set_color(self, color: RgbLedBlockColor):
     self.set_rgb(color.red, color.green, color.blue)
 
-  def set_color_index(self, index: int):
+  def set_color_by_id(self, index: int):
     if index < len(self.colors):
       self.set_rgb(self.colors[index].red, self.colors[index].green, self.colors[index].blue)
 

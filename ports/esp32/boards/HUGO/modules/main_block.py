@@ -19,11 +19,11 @@ class MainBlock:
 
   @staticmethod
   def get_mem_info():
-      free = gc.mem_free()
-      allocated = gc.mem_alloc()
-      total = free + allocated
-      percent = "{0:.2f} %".format(free /  total * 100)
-      return "Free mem: {0} ({1})".format(free, percent)
+    free = gc.mem_free()
+    allocated = gc.mem_alloc()
+    total = free + allocated
+    percent = "{0:.2f} %".format(free /  total * 100)
+    return "Free mem: {0} ({1})".format(free, percent)
 
   @staticmethod
   def run():

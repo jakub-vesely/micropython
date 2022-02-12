@@ -28,9 +28,9 @@ class PowerPlan:
   freq_min = 80000000
 
   def __init__(self, power_save_enabled, frequency, ble_plan:BlePowerPlan) -> None:
-      self.power_save_enabled = power_save_enabled
-      self.frequency = frequency
-      self.ble_plan = ble_plan
+    self.power_save_enabled = power_save_enabled
+    self.frequency = frequency
+    self.ble_plan = ble_plan
 
   @staticmethod
   def get_max_performance_plan():
@@ -46,7 +46,7 @@ class PowerPlan:
 
 class PowerMgmt:
   _power_save_block_count = 0 #can be increased/decreased by more modules. power save is blocked when the block count > 0
-  _used_plan = PowerPlan.get_balanced_plan() #FIXME: will be started with maximal frequency if is not called set_plan explicitly
+  _used_plan = PowerPlan.get_max_performance_plan() #FIXME: will be started with maximal frequency if is not called set_plan explicitly
   _change_callbacks = list()
   #_start_light_sleep_callbacks = list()
   #_stop_light_sleep_callbacks = list()
