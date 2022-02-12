@@ -12,5 +12,5 @@ class BlockTypes:
   buttom = BlockType(0x0d, "button_block")
   distance = BlockType(0x0e, "distance_block")
   position = BlockType(0x0f, "position_block")
-  ambient = BlockType(0x10, "ambient_block")
-  # ir = BlockType(0x11, "ir_block")
+  ir = BlockType(0x10, "ir_block")
+  #ambient = BlockType(0x10, "ambient_block")

@@ -113,10 +113,10 @@ class DisplayBlock(BlockWithOneExtension):
     for pos in range(0, rv):
       normalized = pos / rv
       val = int(round(math.sqrt(1.0 - normalized * normalized) * rh, 0))
-      self._display.pixel(x + val, y - pos, color);
-      self._display.pixel(x - val, y - pos, color);
-      self._display.pixel(x + val, y + pos, color);
-      self._display.pixel(x - val, y + pos, color);
+      self._display.pixel(x + val, y - pos, color)
+      self._display.pixel(x - val, y - pos, color)
+      self._display.pixel(x + val, y + pos, color)
+      self._display.pixel(x - val, y + pos, color)
 
   def print_text(self, x0, y0, text, color=1):
     if self._display:

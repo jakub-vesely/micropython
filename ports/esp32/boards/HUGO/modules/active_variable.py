@@ -21,7 +21,7 @@ class ActiveVariable():
     """
     @param initial_value: if is set Active variable will be preset to this value
     @param renew_period: renew_func will be called with this period if this value > 0
-    @param renew_func: this method will be called periodically if renew_period is > 0 or if get_value is called with the parameter "force"
+    @param renew_func: this method will be called periodically if renew_period is > 0 or if get is called with the parameter "force"
     """
     self._old_value = initial_value
     self._value = initial_value
@@ -39,7 +39,7 @@ class ActiveVariable():
     if self._renew_period > 0:
       self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
 
-  def set_value(self, value):
+  def set(self, value):
     if value is None:
       return #nothing to compare
     self._old_value = self._value
@@ -96,8 +96,8 @@ class ActiveVariable():
       if processed and not repeat:
         self._listeners.remove(listener)
 
-  def get_value(self, force=False):
-    if not self._renew_handle or force:
+  def get(self, force=False):
+    if force:
       self._update_value()
     return self._value
 
@@ -106,7 +106,7 @@ class ActiveVariable():
 
   def _update_value(self):
     if self._renew_func:
-      self.set_value(self._renew_func())
+      self.set(self._renew_func())
 
   def _add_listener(self, listener):
     if not self._listeners and self._renew_period > 0:

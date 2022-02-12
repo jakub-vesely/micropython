@@ -33,7 +33,7 @@ class Manoeuver:
 
 class Chassis:
   state = {}
-  def __init__(self, address_driver_front, address_driver_rear, addr_power=None, power_measurement_period=1):
+  def __init__(self, address_driver_front=20, address_driver_rear=21, addr_power=None, power_measurement_period=1):
     self.speed = Speed.stop
     self.manoeuver = Manoeuver.straight
     self.direction = Direction.forward
@@ -127,9 +127,9 @@ class Chassis:
 
   def set_speed(self, speed:Speed):
     if speed < Speed.stop:
-      self.speed == Speed.stop
+      self.speed = Speed.stop
     elif speed > Speed.fast:
-      self.speed == Speed.fast
+      self.speed = Speed.fast
     else:
       self.speed = speed
     self._adjust_movement()

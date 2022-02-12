@@ -36,7 +36,7 @@ class Logging():
     prefix = (self.tag + ": ").encode("utf-8") if has_prefix else b""
     try:
       complete = prefix + ((message % args) if args else message).encode("utf-8")
-    except (AttributeError, TypeError) as error:
+    except (AttributeError, TypeError):
       complete = prefix + (str((message, args)) if args else str(message)).encode("utf-8")
     for logger in self.loggers:
       logger.log(level, complete)
@@ -47,6 +47,7 @@ class Logging():
 
     file_name = ".error"
     with open(file_name, "w") as file:
+      #pylint: disable=no-member
       sys.print_exception(exc, file)
     is_first = True
     with open(file_name, "r") as file:
