@@ -7,10 +7,10 @@ from micropython import const
 import bluetooth
 import sys
 import struct
-from logging import Logging, LoggerBase
-from planner import Planner
-from power_mgmt import PowerMgmt, PowerPlan
-from active_variable import ActiveVariable
+from basal.logging import Logging, LoggerBase
+from basal.planner import Planner
+from basal.power_mgmt import PowerMgmt, PowerPlan
+from basal.active_variable import ActiveVariable
 from remote_control.remote_key import RemoteKey
 
 _ADV_TYPE_FLAGS = const(0x01)
@@ -161,7 +161,7 @@ class Ble():
   @classmethod
   def get_shell(cls):
     if not cls._shell:
-      from shell import Shell
+      from basal.shell import Shell
       cls._shell = Shell()
     return cls._shell
 

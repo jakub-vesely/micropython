@@ -1,8 +1,8 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from logging import Logging
-from power_mgmt import PowerMgmt
+from basal.logging import Logging
+from basal.power_mgmt import PowerMgmt
 import sys
 import time
 import uasyncio

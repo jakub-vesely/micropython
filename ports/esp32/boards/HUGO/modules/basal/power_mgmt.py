@@ -2,7 +2,6 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 import machine
-#from logging import Logging
 
 class BlePowerPlan:
 

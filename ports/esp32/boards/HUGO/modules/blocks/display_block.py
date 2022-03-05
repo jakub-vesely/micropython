@@ -1,12 +1,11 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-import ssd1306
 import math
-from block_types import BlockTypes
-from extended_block_base import BlockWithOneExtension
-
 from micropython import const
+import blocks.ssd1306 as ssd1306
+from blocks.block_types import BlockTypes
+from blocks.extended_block_base import BlockWithOneExtension
 
 _get_dimmensions_command = const(0x03)
 

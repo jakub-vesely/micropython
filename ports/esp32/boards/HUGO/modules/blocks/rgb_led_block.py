@@ -1,8 +1,8 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from block_types import BlockTypes
-from block_base import BlockBase
+from blocks.block_types import BlockTypes
+from blocks.block_base import BlockBase
 
 class RgbLedBlockCommand():
   set_rgb = 1 # followed by 3 bytes (RGB)
@@ -17,37 +17,37 @@ class Rgb():
     self.blue = blue
 
 class RgbLedBlockColor():
-  black = Rgb(0, 0 ,0)
-  white = Rgb(255, 255 ,255)
-  red = Rgb(255, 0 ,0)
+  black = Rgb(0, 0, 0)
+  white = Rgb(255, 255, 255)
+  red = Rgb(255, 0, 0)
   green = Rgb(0, 255, 0)
-  blue = Rgb(0, 0 ,255)
-  yellow = Rgb(255, 225,0)
-  purple = Rgb(255, 0 ,255)
+  blue = Rgb(0, 0, 255)
+  yellow = Rgb(255, 225, 0)
+  purple = Rgb(255, 0, 255)
   cyan = Rgb(0, 255, 255)
-  orange = Rgb(255, 127,0)
-  greenyellow = Rgb(127, 255,0)
-  skyblue = Rgb(0, 127,255)
+  orange = Rgb(255, 127, 0)
+  greenyellow = Rgb(127, 255, 0)
+  skyblue = Rgb(0, 127, 255)
   aquamarine = Rgb(0, 255, 127)
   magenta = Rgb(255, 0, 127)
   violet = Rgb(127, 0, 255)
 
 class RgbLedBlock(BlockBase):
   colors = (
-    RgbLedBlockColor.black,
-    RgbLedBlockColor.white,
-    RgbLedBlockColor.red,
-    RgbLedBlockColor.green,
-    RgbLedBlockColor.blue,
-    RgbLedBlockColor.yellow,
-    RgbLedBlockColor.purple,
-    RgbLedBlockColor.cyan,
-    RgbLedBlockColor.orange,
-    RgbLedBlockColor.greenyellow,
-    RgbLedBlockColor.skyblue,
-    RgbLedBlockColor.aquamarine,
-    RgbLedBlockColor.magenta,
-    RgbLedBlockColor.violet
+      RgbLedBlockColor.black,
+      RgbLedBlockColor.white,
+      RgbLedBlockColor.red,
+      RgbLedBlockColor.green,
+      RgbLedBlockColor.blue,
+      RgbLedBlockColor.yellow,
+      RgbLedBlockColor.purple,
+      RgbLedBlockColor.cyan,
+      RgbLedBlockColor.orange,
+      RgbLedBlockColor.greenyellow,
+      RgbLedBlockColor.skyblue,
+      RgbLedBlockColor.aquamarine,
+      RgbLedBlockColor.magenta,
+      RgbLedBlockColor.violet
   )
 
   def __init__(self, address=None):

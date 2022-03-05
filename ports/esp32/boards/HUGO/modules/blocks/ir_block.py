@@ -1,13 +1,14 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from block_types import BlockTypes
-from block_base import BlockBase
-from active_variable import ActiveVariable
-from remote_control.remote_key import RemoteKey
-from remote_control.remote_keyboard_base import RemoteKeyboardBase
 # pylint: disable=no-name-in-module
 from micropython import const
+from basal.active_variable import ActiveVariable
+from blocks.block_types import BlockTypes
+from blocks.block_base import BlockBase
+from remote_control.remote_key import RemoteKey
+from remote_control.remote_keyboard_base import RemoteKeyboardBase
+
 
 _ir_data_ready_command = const(0x01)
 _ir_data_command = const(0x02)
