@@ -1,8 +1,8 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from planner import Planner
-from logging import Logging
+from basal.planner import Planner
+from basal.logging import Logging
 import math
 
 class Conditions():

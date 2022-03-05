@@ -3,8 +3,8 @@
 
 import machine
 import gc
-from planner import Planner
-from ble import Ble
+from basal.planner import Planner
+from basal.ble import Ble
 
 class MainBlock:
   @staticmethod

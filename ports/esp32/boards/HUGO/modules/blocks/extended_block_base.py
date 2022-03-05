@@ -1,8 +1,9 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from block_base import BlockBase
 from micropython import const
+from blocks.block_base import BlockBase
+
 
 _get_ext_count_command =      const(0xf9)
 _get_ext_address_command =    const(0xfa)

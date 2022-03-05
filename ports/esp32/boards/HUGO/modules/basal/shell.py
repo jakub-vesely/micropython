@@ -3,9 +3,11 @@
 
 import os
 import hashlib
-from logging import Logging
-from main_block import MainBlock
-from planner import Planner
+from basal.logging import Logging
+from blocks.main_block import MainBlock
+from basal.planner import Planner
+#pyright: reportMissingImports=false
+#pylint: disable=no-name-in-module ;implemented in micropython
 from micropython import const
 
 _cmd_version            = const(0x80)

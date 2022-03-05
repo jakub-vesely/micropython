@@ -1,8 +1,8 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from logging import Logging
-from block_types import BlockTypes
+from basal.logging import Logging
+from blocks.block_types import BlockTypes
 import machine
 import time
 from micropython import const
