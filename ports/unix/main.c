@@ -47,6 +47,7 @@
 #include "py/mphal.h"
 #include "py/mpthread.h"
 #include "extmod/misc.h"
+#include "extmod/moduplatform.h"
 #include "extmod/vfs.h"
 #include "extmod/vfs_posix.h"
 #include "genhdr/mpversion.h"
@@ -178,7 +179,8 @@ STATIC char *strjoin(const char *s1, int sep_char, const char *s2) {
 
 STATIC int do_repl(void) {
     mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; "
-        MICROPY_PY_SYS_PLATFORM " version\nUse Ctrl-D to exit, Ctrl-E for paste mode\n");
+        MICROPY_PY_SYS_PLATFORM " [" MICROPY_PLATFORM_COMPILER "] version\n"
+        "Use Ctrl-D to exit, Ctrl-E for paste mode\n");
 
     #if MICROPY_USE_READLINE == 1
 
@@ -191,7 +193,7 @@ STATIC int do_repl(void) {
 
     input_restart:
         vstr_reset(&line);
-        int ret = readline(&line, ">>> ");
+        int ret = readline(&line, mp_repl_get_ps1());
         mp_parse_input_kind_t parse_input_kind = MP_PARSE_SINGLE_INPUT;
 
         if (ret == CHAR_CTRL_C) {
@@ -238,7 +240,7 @@ STATIC int do_repl(void) {
             // got a line with non-zero length, see if it needs continuing
             while (mp_repl_continue_with_input(vstr_null_terminated_str(&line))) {
                 vstr_add_byte(&line, '\n');
-                ret = readline(&line, "... ");
+                ret = readline(&line, mp_repl_get_ps2());
                 if (ret == CHAR_CTRL_C) {
                     // cancel everything
                     printf("\n");
@@ -263,13 +265,13 @@ STATIC int do_repl(void) {
     // use simple readline
 
     for (;;) {
-        char *line = prompt(">>> ");
+        char *line = prompt((char *)mp_repl_get_ps1());
         if (line == NULL) {
             // EOF
             return 0;
         }
         while (mp_repl_continue_with_input(line)) {
-            char *line2 = prompt("... ");
+            char *line2 = prompt((char *)mp_repl_get_ps2());
             if (line2 == NULL) {
                 break;
             }
@@ -497,7 +499,7 @@ MP_NOINLINE int main_(int argc, char **argv) {
     if (path == NULL) {
         path = MICROPY_PY_SYS_PATH_DEFAULT;
     }
-    size_t path_num = 2; // [0] is frozen, [1] is for current dir (or base dir of the script)
+    size_t path_num = 1; // [0] is for current dir (or base dir of the script)
     if (*path == PATHLIST_SEP_CHAR) {
         path_num++;
     }
@@ -510,11 +512,10 @@ MP_NOINLINE int main_(int argc, char **argv) {
     mp_obj_list_init(MP_OBJ_TO_PTR(mp_sys_path), path_num);
     mp_obj_t *path_items;
     mp_obj_list_get(mp_sys_path, &path_num, &path_items);
-    path_items[0] = MP_OBJ_NEW_QSTR(MP_QSTR__dot_frozen);
-    path_items[1] = MP_OBJ_NEW_QSTR(MP_QSTR_);
+    path_items[0] = MP_OBJ_NEW_QSTR(MP_QSTR_);
     {
         char *p = path;
-        for (mp_uint_t i = 2; i < path_num; i++) {
+        for (mp_uint_t i = 1; i < path_num; i++) {
             char *p1 = strchr(p, PATHLIST_SEP_CHAR);
             if (p1 == NULL) {
                 p1 = p + strlen(p);
@@ -655,9 +656,9 @@ MP_NOINLINE int main_(int argc, char **argv) {
                 break;
             }
 
-            // Set base dir of the script as second entry in sys.path.
+            // Set base dir of the script as first entry in sys.path.
             char *p = strrchr(basedir, '/');
-            path_items[1] = mp_obj_new_str_via_qstr(basedir, p - basedir);
+            path_items[0] = mp_obj_new_str_via_qstr(basedir, p - basedir);
             free(pathbuf);
 
             set_sys_argv(argv, argc, a);
@@ -721,38 +722,6 @@ MP_NOINLINE int main_(int argc, char **argv) {
     // printf("total bytes = %d\n", m_get_total_bytes_allocated());
     return ret & 0xff;
 }
-
-#if !MICROPY_VFS
-uint mp_import_stat(const char *path) {
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        if (S_ISDIR(st.st_mode)) {
-            return MP_IMPORT_STAT_DIR;
-        } else if (S_ISREG(st.st_mode)) {
-            return MP_IMPORT_STAT_FILE;
-        }
-    }
-    return MP_IMPORT_STAT_NO_EXIST;
-}
-
-#if MICROPY_PY_IO
-// Factory function for I/O stream classes, only needed if generic VFS subsystem isn't used.
-// Note: buffering and encoding are currently ignored.
-mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kwargs) {
-    enum { ARG_file, ARG_mode };
-    STATIC const mp_arg_t allowed_args[] = {
-        { MP_QSTR_file, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_rom_obj = MP_ROM_NONE} },
-        { MP_QSTR_mode, MP_ARG_OBJ, {.u_obj = MP_OBJ_NEW_QSTR(MP_QSTR_r)} },
-        { MP_QSTR_buffering, MP_ARG_INT, {.u_int = -1} },
-        { MP_QSTR_encoding, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
-    };
-    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args, pos_args, kwargs, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
-    return mp_vfs_posix_file_open(&mp_type_textio, args[ARG_file].u_obj, args[ARG_mode].u_obj);
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
-#endif
-#endif
 
 void nlr_jump_fail(void *val) {
     fprintf(stderr, "FATAL: uncaught NLR %p\n", val);
