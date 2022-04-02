@@ -25,11 +25,6 @@ if(NOT MICROPY_BOARD)
     set(MICROPY_BOARD PICO)
 endif()
 
-# Set the PICO_BOARD if it's not already set.
-if(NOT PICO_BOARD)
-    string(TOLOWER ${MICROPY_BOARD} PICO_BOARD)
-endif()
-
 # Set the board directory and check that it exists.
 if(NOT MICROPY_BOARD_DIR)
     set(MICROPY_BOARD_DIR ${MICROPY_PORT_DIR}/boards/${MICROPY_BOARD})
@@ -38,8 +33,15 @@ if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
     message(FATAL_ERROR "Invalid MICROPY_BOARD specified: ${MICROPY_BOARD}")
 endif()
 
-# Include board config
+set(MICROPY_USER_FROZEN_MANIFEST ${MICROPY_FROZEN_MANIFEST})
+
+# Include board config, it may override MICROPY_FROZEN_MANIFEST
 include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake) 
+
+# Set the PICO_BOARD if it's not already set (allow a board to override it).
+if(NOT PICO_BOARD)
+    string(TOLOWER ${MICROPY_BOARD} PICO_BOARD)
+endif()
 
 # Include component cmake fragments
 include(${MICROPY_DIR}/py/py.cmake)
@@ -79,6 +81,7 @@ set(MICROPY_SOURCE_LIB
 
 set(MICROPY_SOURCE_DRIVERS
     ${MICROPY_DIR}/drivers/bus/softspi.c
+    ${MICROPY_DIR}/drivers/dht/dht.c
 )
 
 set(MICROPY_SOURCE_PORT
@@ -96,7 +99,6 @@ set(MICROPY_SOURCE_PORT
     main.c
     modmachine.c
     modrp2.c
-    moduos.c
     modutime.c
     mphalport.c
     mpthreadport.c
@@ -104,6 +106,7 @@ set(MICROPY_SOURCE_PORT
     rp2_pio.c
     tusb_port.c
     uart.c
+    msc_disk.c
 )
 
 set(MICROPY_SOURCE_QSTR
@@ -215,9 +218,13 @@ if (MICROPY_PY_NETWORK_NINAW10)
     )
 endif()
 
-# Define mpy-cross flags and frozen manifest
+# Define mpy-cross flags
 set(MICROPY_CROSS_FLAGS -march=armv7m)
-if (NOT MICROPY_FROZEN_MANIFEST)
+
+# Set the frozen manifest file
+if (MICROPY_USER_FROZEN_MANIFEST)
+    set(MICROPY_FROZEN_MANIFEST ${MICROPY_USER_FROZEN_MANIFEST})
+elseif (NOT MICROPY_FROZEN_MANIFEST)
     set(MICROPY_FROZEN_MANIFEST ${PROJECT_SOURCE_DIR}/boards/manifest.py)
 endif()
 
