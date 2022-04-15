@@ -82,7 +82,8 @@ class Ble():
   _running_time_up = None
   _time_down = None
   _time_to_power_save = None
-  value_remote: ActiveVariable = None
+  value_remote: ActiveVariable = ActiveVariable(RemoteKey.get_default())
+
   @classmethod
   def init(cls) -> None:
     PowerMgmt.register_management_change_callback(cls._set_power_save_timeouts)
@@ -91,8 +92,6 @@ class Ble():
 
     Logging.add_logger(BleLogger())
     cls._start_ble() #to be allocated big blocks in the beginning it should prevent memory fragmentation
-    cls.value_remote = ActiveVariable(RemoteKey.get_default())
-
 
   @classmethod
   def _set_power_save_timeouts(cls, power_plan:PowerPlan):

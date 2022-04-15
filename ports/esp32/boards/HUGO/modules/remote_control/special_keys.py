@@ -4,8 +4,8 @@
 class SpecialKeys:
   left = "left"
   right = "right"
-  top = "top"
-  bottom = "bottom"
+  up = "up"
+  down = "down"
   space = "space"
   delete = "delete"
   backspace = "backspace"

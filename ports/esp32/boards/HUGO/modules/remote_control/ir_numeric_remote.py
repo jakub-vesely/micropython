@@ -22,12 +22,12 @@ class IrNumericRemote(RemoteKeyboardBase):
   key_9 = RemoteKey("9", 9, address)
   key_0 = RemoteKey("0", 25, address)
   key_star = RemoteKey("*", 22, address)
-  key_hash = RemoteKey( "#", 13, address)
+  key_hash = RemoteKey("#", 13, address)
   key_ok = RemoteKey(SpecialKeys.ok, 28, address)
   key_left = RemoteKey(SpecialKeys.left, 8, address)
   key_right = RemoteKey(SpecialKeys.right, 90, address)
-  key_top = RemoteKey(SpecialKeys.top, 24, address)
-  key_bottom = RemoteKey(SpecialKeys.bottom, 82, address)
+  key_up = RemoteKey(SpecialKeys.up, 24, address)
+  key_down = RemoteKey(SpecialKeys.down, 82, address)
 
   _keys = (
       key_1,
@@ -45,8 +45,8 @@ class IrNumericRemote(RemoteKeyboardBase):
       key_ok,
       key_left,
       key_right,
-      key_top,
-      key_bottom,
+      key_up,
+      key_down,
   )
 
   def get_address(self):
