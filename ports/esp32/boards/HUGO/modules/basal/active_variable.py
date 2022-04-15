@@ -45,56 +45,62 @@ class ActiveVariable():
     self._old_value = self._value
     self._value = value
     for listener in self._listeners:
-      processed = False
       _type = listener[1]
       repeat = listener[2]
 
       if _type == Conditions.equal_to:
         if isinstance(value, float) or isinstance(listener[3], float):
           if (self._old_value is None or not math.isclose(self._old_value, listener[3])) and math.isclose(value, listener[3]):
+            if  not repeat:
+              self._remove_listener(listener) #TODO: maybe it can be returned to the end of this method it should not be important for the called methd that it will be removed later - events are synchronous
             listener[4](*listener[5], **listener[6])
-            processed = True
         else:
           if (self._old_value is None or self._old_value != listener[3]) and value == listener[3]:
+            if  not repeat:
+              self._remove_listener(listener)
             listener[4](*listener[5], **listener[6])
-            processed = True
       elif _type == Conditions.not_equal_to:
         if isinstance(value, float) or isinstance(listener[3], float):
           if (self._old_value is None or math.isclose(self._old_value, listener[3])) and not math.isclose(value, listener[3]):
+            if  not repeat:
+              self._remove_listener(listener)
             listener[4](*listener[5], **listener[6])
-            processed = True
         else:
           if (self._old_value is None or self._old_value == listener[3]) and value != listener[3]:
+            if  not repeat:
+              self._remove_listener(listener)
             listener[4](*listener[5], **listener[6])
-            processed = True
       elif _type == Conditions.less_than:
         if (self._old_value is None or self._old_value >= listener[3]) and value < listener[3]:
+          if  not repeat:
+            self._remove_listener(listener)
           listener[4](*listener[5], **listener[6])
-          processed = True
       elif _type == Conditions.more_than:
         if (self._old_value is None or self._old_value <= listener[3]) and value > listener[3]:
+          if  not repeat:
+            self._remove_listener(listener)
           listener[4](*listener[5], **listener[6])
-          processed = True
       elif _type == Conditions.in_range:
         if (self._old_value is None or self._old_value < listener[3] or self._old_value >= listener[4]) and  value >= listener[3] and value < listener[4]:
+          if  not repeat:
+            self._remove_listener(listener)
           listener[5](*listener[6], **listener[7])
-          processed = True
       elif _type == Conditions.out_of_range:
         if (self._old_value is None or self._old_value >= listener[3] and self._old_value < listener[4]) and (value < listener[3] or value >= listener[4]):
+          if  not repeat:
+            self._remove_listener(listener)
           listener[5](*listener[6], **listener[7])
-          processed = True
       elif _type == Conditions.value_changed:
         if value != self._old_value:
+          if  not repeat:
+            self._remove_listener(listener)
           listener[3](*listener[4], **listener[5])
-          processed = True
       elif _type == Conditions.value_updated:
+        if  not repeat:
+          self._remove_listener(listener)
         listener[3](*listener[4], **listener[5])
-        processed = True
       else:
         self.logging.error("unknown listener type %s" % str(listener[1]))
-
-      if processed and not repeat:
-        self._listeners.remove(listener)
 
   def get(self, force=False):
     if force:
@@ -113,7 +119,7 @@ class ActiveVariable():
       self._renew_handle = Planner.repeat(self._renew_period, self._update_value)
     self._listeners.append(listener)
     self._handle_count += 1
-    return listener[0]
+    return listener[0] #returns provided handle
 
   def remove_trigger(self, handle):
     for listener in self._listeners:
@@ -124,6 +130,9 @@ class ActiveVariable():
           self._renew_handle = None
         return True
     return False
+
+  def _remove_listener(self, listener):
+    return self.remove_trigger(listener[0])
 
   def equal_to(self, expected, repetitive, function, *args, **kwargs):
     """
