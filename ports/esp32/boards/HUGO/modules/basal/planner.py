@@ -7,7 +7,6 @@ import sys
 import time
 import uasyncio
 import gc
-import micropython
 
 logging = Logging("planner")
 unhandled_exception_prefix = "Unhandled exception"

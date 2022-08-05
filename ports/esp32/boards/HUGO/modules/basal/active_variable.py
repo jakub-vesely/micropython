@@ -134,14 +134,14 @@ class ActiveVariable():
   def _remove_listener(self, listener):
     return self.remove_trigger(listener[0])
 
-  def equal_to(self, expected, repetitive, function, *args, **kwargs):
+  def equal_to(self, expected, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly equal to expected value
     """
     return self._add_listener((self._handle_count, Conditions.equal_to, repetitive, expected, function, args, kwargs))
 
-  def not_equal_to(self, expected, repetitive, function, *args, **kwargs):
+  def not_equal_to(self, expected, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly not equal to expected value
@@ -149,42 +149,42 @@ class ActiveVariable():
     return self._add_listener((self._handle_count, Conditions.not_equal_to, repetitive, expected, function, args, kwargs))
 
 
-  def less_than(self, expected, repetitive, function, *args, **kwargs):
+  def less_than(self, expected, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly smaller than expected value
     """
     return self._add_listener((self._handle_count, Conditions.less_than, repetitive, expected, function, args, kwargs))
 
-  def more_than(self, expected, repetitive, function, *args, **kwargs):
+  def more_than(self, expected, repetitive:bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly bigger than expected value
     """
     return self._add_listener((self._handle_count, Conditions.more_than, repetitive, expected, function, args, kwargs))
 
-  def in_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
+  def in_range(self, expected_min, expected_max, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly bigger or equal to expected_min value and smaller that expected_max value
     """
     return self._add_listener((self._handle_count, Conditions.in_range, repetitive, expected_min, expected_max, function, args, kwargs))
 
-  def out_of_range(self, expected_min, expected_max, repetitive, function, *args, **kwargs):
+  def out_of_range(self, expected_min, expected_max, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is newly smaller than expected_min value or bigger or equal to expected_max value
     """
     return self._add_listener((self._handle_count, Conditions.out_of_range, repetitive, expected_min, expected_max, function, args, kwargs))
 
-  def changed(self, repetitive, function, *args, **kwargs):
+  def changed(self, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called when
     measured value is different that last time measured value
     """
     return self._add_listener((self._handle_count, Conditions.value_changed, repetitive, function, args, kwargs))
 
-  def updated(self, repetitive, function, *args, **kwargs):
+  def updated(self, repetitive: bool, function: callable, *args, **kwargs):
     """
     provided function with arguments will be called always when
     a value is measured

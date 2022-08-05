@@ -1,11 +1,14 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from basal.logging import Logging
-from blocks.block_types import BlockTypes
 import machine
 import time
 from micropython import const
+import typing
+
+from basal.logging import Logging
+from blocks.block_list import BlockList
+from blocks.block_types import BlockType
 
 _power_save_command = const(0xf6)
 _get_module_version_command = const(0xf7)
@@ -21,12 +24,16 @@ class PowerSaveLevel:
 class BlockBase:
   i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
 
-  def __init__(self, block_type: int, address: int):
+  def __init__(self, block_type: BlockType, address: int):
+    BlockList.add_block(self)
     self.type_id = block_type.id
     self.address = address if address else block_type.id #default block i2c address is equal to its block type
+
+    self.active_variables = list()
+    self.block_type_valid = False
     self.logging = Logging(block_type.name)
     self.block_version = self._get_block_version()
-    self.block_type_valid = False
+    self.remote_variables = {}
 
     self.power_save_level = PowerSaveLevel.NoPowerSave
     self._tiny_write_base_id(_power_save_command, self.power_save_level.to_bytes(1, 'big'), True) #wake up block functionality
@@ -73,7 +80,7 @@ class BlockBase:
       return
     self.__tiny_write_common(self.type_id, command, data, silent)
 
-  def __tiny_read_common(self, type_id: int, command: int, in_data: bytes=None, expected_length: int=0, silent=False):
+  def __tiny_read_common(self, type_id: int, command: int, in_data: typing.Union[bytes,None]=None, expected_length: int=0, silent=False):
     """
     reads data form tiny_block via I2C
     @param type_id: block type id
@@ -95,10 +102,10 @@ class BlockBase:
       self.logging.error("invalid block type - reading interupted")
       return None
 
-  def _tiny_read_base_id(self, command: int, in_data: bytes=None, expected_length: int=0, silent=False):
+  def _tiny_read_base_id(self, command: int, in_data: typing.Union[bytes,None]=None, expected_length: int=0, silent=False):
     return self.__tiny_read_common(_i2c_block_type_id_base, command, in_data, expected_length, silent)
 
-  def _tiny_read(self, command: int, in_data: bytes=None, expected_length: int=0):
+  def _tiny_read(self, command: int, in_data: typing.Union[bytes,None]=None, expected_length: int=0):
     if not self.is_available():
       return None
 
@@ -115,12 +122,15 @@ class BlockBase:
     """
     data = self._tiny_read_base_id(_get_module_version_command, None, 3, silent=True)
     if not data:
-      return None
+      return b""
     return (data[0], data[1], data[2])
 
   def is_available(self):
     return self.block_type_valid #available and valid block version
 
-  def power_save(self, level:PowerSaveLevel) -> None:
+  def power_save(self, level:int) -> None:
+    """
+    level is aPowerSaveLevel value
+    """
     self.power_save_level = level
     self._tiny_write_base_id(_power_save_command, level.to_bytes(1, 'big'))
