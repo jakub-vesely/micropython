@@ -3,7 +3,7 @@
 
 from micropython import const
 from blocks.block_base import BlockBase
-
+from blocks.block_types import BlockType
 
 _get_ext_count_command =      const(0xf9)
 _get_ext_address_command =    const(0xfa)
@@ -51,7 +51,7 @@ class ExtendedBlockBase(BlockBase):
       return None
 
 class BlockWithOneExtension(ExtendedBlockBase):
-  def __init__(self, type_id: int, address: int):
+  def __init__(self, type_id: BlockType, address: int):
     super().__init__(type_id, address)
     self.ext_address = self.get_extension_address() if self.is_available() else None
 

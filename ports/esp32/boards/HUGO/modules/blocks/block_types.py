@@ -1,7 +1,7 @@
 class BlockType:
   def __init__(self, type: int, name: str):
-    self.id:bytes = type
-    self.name:bytes = name
+    self.id:int = type
+    self.name:bytes = name.encode("ascii")
 
 class BlockTypes:
   power = BlockType(0x08, "power_block")

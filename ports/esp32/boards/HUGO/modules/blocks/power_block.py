@@ -5,6 +5,9 @@ from micropython import const
 from blocks.block_types import BlockTypes
 from blocks.extended_block_base import BlockWithOneExtension
 from basal.active_variable import ActiveVariable
+from basal.active_quantity import ActiveQuantity
+from quantities.current import Current
+from quantities.voltage import Voltage
 
 _charging_state_command = const(0x01)
 
@@ -29,7 +32,7 @@ _shunt_r = 0.1
 
 class PowerBlock(BlockWithOneExtension):
 
-  def __init__(self, address: int=None, measurement_period: float=1):
+  def __init__(self, address: int=0, measurement_period: float=1):
     """
     @param address:block address
     @param mesurement_period: sampling frequency in sec
@@ -37,14 +40,29 @@ class PowerBlock(BlockWithOneExtension):
     super().__init__(BlockTypes.power, address)
     self.is_usb_connected = ActiveVariable(False, measurement_period, self._get_usb_state)
     self.is_charging = ActiveVariable(False, measurement_period, self._get_charging_state)
-    self.battery_voltage_V = ActiveVariable(0, measurement_period, self._get_voltage)
-    self.battery_current_mA = ActiveVariable(0, measurement_period, self._get_current_ma)
+    self.battery_voltage = ActiveQuantity(Voltage(), 0, measurement_period, self._get_voltage)
+    self.battery_current = ActiveQuantity(Current(), 0, measurement_period, self._get_current_A)
+
+    self._remote_variables = {
+        "is_usb_connected": self.is_usb_connected,
+        "is_charging": self.is_charging,
+        "battery_voltage": self.battery_voltage,
+        "battery_current": self.battery_current
+    }
 
     self._ina_init()
+
+  def get_remote_variables(self):
+    return self._remote_variables
+
+  def _register_variable(self, active_variable:ActiveVariable, alias: str="", quantity:str=""):
+    self.active_variables.append(active_variable)
+    return active_variable
 
   def _ina_init(self):
     if not self.ext_address:
       return
+
     data = _config.to_bytes(2, 'big', False)
     data = _ina219_configuration_command.to_bytes(1, "big", False) + data
     self._one_ext_write(data)
@@ -59,7 +77,6 @@ class PowerBlock(BlockWithOneExtension):
     state = self._tiny_read(_charging_state_command, None, 1)
     if state is None:
       return 0
-    self.logging.info("_get_usb_state: %s, %d", str(state), state[0] >> 1)
     return state[0] >> 1
 
   def _get_charging_state(self) -> int:
@@ -78,11 +95,14 @@ class PowerBlock(BlockWithOneExtension):
     raw_voltage = ((data[0] << 8) | data[1]) >> 3
     return  raw_voltage * 0.004 #LSB = 4 mV
 
-  def _get_current_ma(self) -> float:
+  def _get_current_A(self) -> float:
     data = self._one_ext_read(_ina219_shunt_voltage_command.to_bytes(1, "big", False), 2)
     if not data:
       return 0
     raw_voltage = (data[0] << 8) | data[1]
+    negative = True
     if data[0] & 0x80:
       raw_voltage = ((raw_voltage - 1) ^ 0xffff)
-    return raw_voltage * (0.01 / _shunt_r) #LSB = 10 uV
+      negative = False
+    abs_value = raw_voltage * (0.01 / _shunt_r) * 1e-3 #LSB = 10 uV
+    return abs_value * -1 if negative else abs_value
