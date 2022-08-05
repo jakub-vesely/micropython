@@ -59,13 +59,23 @@ const mp_obj_module_t mp_module___main__ = {
     .globals = (mp_obj_dict_t *)&MP_STATE_VM(dict_main),
 };
 
+MP_REGISTER_MODULE(MP_QSTR___main__, mp_module___main__);
+
 void mp_init(void) {
     qstr_init();
 
     // no pending exceptions to start with
     MP_STATE_THREAD(mp_pending_exception) = MP_OBJ_NULL;
     #if MICROPY_ENABLE_SCHEDULER
-    MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
+    #if MICROPY_SCHEDULER_STATIC_NODES
+    if (MP_STATE_VM(sched_head) == NULL) {
+        // no pending callbacks to start with
+        MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
+    } else {
+        // pending callbacks are on the list, eg from before a soft reset
+        MP_STATE_VM(sched_state) = MP_SCHED_PENDING;
+    }
+    #endif
     MP_STATE_VM(sched_idx) = 0;
     MP_STATE_VM(sched_len) = 0;
     #endif
@@ -309,6 +319,15 @@ mp_obj_t mp_unary_op(mp_unary_op_t op, mp_obj_t arg) {
             // if arg==mp_const_none.
             return mp_const_true;
         }
+        #if MICROPY_PY_BUILTINS_FLOAT
+        if (op == MP_UNARY_OP_FLOAT_MAYBE
+            #if MICROPY_PY_BUILTINS_COMPLEX
+            || op == MP_UNARY_OP_COMPLEX_MAYBE
+            #endif
+            ) {
+            return MP_OBJ_NULL;
+        }
+        #endif
         // With MP_UNARY_OP_INT, mp_unary_op() becomes a fallback for mp_obj_get_int().
         // In this case provide a more focused error message to not confuse, e.g. chr(1.0)
         #if MICROPY_ERROR_REPORTING <= MICROPY_ERROR_REPORTING_TERSE
@@ -1059,8 +1078,7 @@ STATIC const mp_obj_type_t mp_type_checked_fun = {
 };
 
 STATIC mp_obj_t mp_obj_new_checked_fun(const mp_obj_type_t *type, mp_obj_t fun) {
-    mp_obj_checked_fun_t *o = m_new_obj(mp_obj_checked_fun_t);
-    o->base.type = &mp_type_checked_fun;
+    mp_obj_checked_fun_t *o = mp_obj_malloc(mp_obj_checked_fun_t, &mp_type_checked_fun);
     o->type = type;
     o->fun = fun;
     return MP_OBJ_FROM_PTR(o);

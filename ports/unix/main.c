@@ -178,9 +178,9 @@ STATIC char *strjoin(const char *s1, int sep_char, const char *s2) {
 #endif
 
 STATIC int do_repl(void) {
-    mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; "
-        MICROPY_PY_SYS_PLATFORM " [" MICROPY_PLATFORM_COMPILER "] version\n"
-        "Use Ctrl-D to exit, Ctrl-E for paste mode\n");
+    mp_hal_stdout_tx_str(MICROPY_BANNER_NAME_AND_VERSION);
+    mp_hal_stdout_tx_str("; " MICROPY_BANNER_MACHINE);
+    mp_hal_stdout_tx_str("\nUse Ctrl-D to exit, Ctrl-E for paste mode\n");
 
     #if MICROPY_USE_READLINE == 1
 
@@ -328,6 +328,10 @@ STATIC void print_help(char **argv) {
         , heap_size);
     impl_opts_cnt++;
     #endif
+    #if defined(__APPLE__)
+    printf("  realtime -- set thread priority to realtime\n");
+    impl_opts_cnt++;
+    #endif
 
     if (impl_opts_cnt == 0) {
         printf("  (none)\n");
@@ -399,6 +403,15 @@ STATIC void pre_process_options(int argc, char **argv) {
                         goto invalid_arg;
                     }
                 #endif
+                #if defined(__APPLE__)
+                } else if (strcmp(argv[a + 1], "realtime") == 0) {
+                    #if MICROPY_PY_THREAD
+                    mp_thread_is_realtime_enabled = true;
+                    #endif
+                    // main thread was already intialized before the option
+                    // was parsed, so we have to enable realtime here.
+                    mp_thread_set_realtime();
+                #endif
                 } else {
                 invalid_arg:
                     exit(invalid_args());
@@ -464,8 +477,22 @@ MP_NOINLINE int main_(int argc, char **argv) {
     pre_process_options(argc, argv);
 
     #if MICROPY_ENABLE_GC
+    #if !MICROPY_GC_SPLIT_HEAP
     char *heap = malloc(heap_size);
     gc_init(heap, heap + heap_size);
+    #else
+    assert(MICROPY_GC_SPLIT_HEAP_N_HEAPS > 0);
+    char *heaps[MICROPY_GC_SPLIT_HEAP_N_HEAPS];
+    long multi_heap_size = heap_size / MICROPY_GC_SPLIT_HEAP_N_HEAPS;
+    for (size_t i = 0; i < MICROPY_GC_SPLIT_HEAP_N_HEAPS; i++) {
+        heaps[i] = malloc(multi_heap_size);
+        if (i == 0) {
+            gc_init(heaps[i], heaps[i] + multi_heap_size);
+        } else {
+            gc_add(heaps[i], heaps[i] + multi_heap_size);
+        }
+    }
+    #endif
     #endif
 
     #if MICROPY_ENABLE_PYSTACK
@@ -716,7 +743,13 @@ MP_NOINLINE int main_(int argc, char **argv) {
     #if MICROPY_ENABLE_GC && !defined(NDEBUG)
     // We don't really need to free memory since we are about to exit the
     // process, but doing so helps to find memory leaks.
+    #if !MICROPY_GC_SPLIT_HEAP
     free(heap);
+    #else
+    for (size_t i = 0; i < MICROPY_GC_SPLIT_HEAP_N_HEAPS; i++) {
+        free(heaps[i]);
+    }
+    #endif
     #endif
 
     // printf("total bytes = %d\n", m_get_total_bytes_allocated());
@@ -724,6 +757,9 @@ MP_NOINLINE int main_(int argc, char **argv) {
 }
 
 void nlr_jump_fail(void *val) {
+    #if MICROPY_USE_READLINE == 1
+    mp_hal_stdio_mode_orig();
+    #endif
     fprintf(stderr, "FATAL: uncaught NLR %p\n", val);
     exit(1);
 }
