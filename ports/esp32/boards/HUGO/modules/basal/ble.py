@@ -140,7 +140,7 @@ class Ble():
     cls._ble = None
     cls._ble = bluetooth.BLE()
     cls._ble.active(True)
-    cls._ble.config(rxbuf=_BMS_MTU)
+    #cls._ble.config(rxbuf=_BMS_MTU)
     cls._ble.irq(cls._irq)
 
     #cls._ble.config(mtu=_BMS_MTU)
