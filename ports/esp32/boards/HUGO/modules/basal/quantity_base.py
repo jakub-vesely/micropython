@@ -45,7 +45,6 @@ class QuantityBase():
             for unit_name, unit_multiplier in self.units.items():
                 recalculated = float(value) / unit_multiplier
                 new_penalty = self._get_penalty(recalculated)
-                print(("new_penalty", new_penalty))
                 if new_penalty < last_penalty or unit_multiplier == 1:
                     new_value_str = ("{:.%dg}" % self.precision).format(recalculated)
                     if len(new_value_str) > 4 and  new_value_str[-4] == 'e' and new_value_str[-2] == '0':

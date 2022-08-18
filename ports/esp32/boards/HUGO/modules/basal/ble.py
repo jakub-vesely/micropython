@@ -12,6 +12,7 @@ from basal.planner import Planner
 from basal.power_mgmt import PowerMgmt, PowerPlan
 from basal.active_variable import ActiveVariable
 from remote_control.remote_key import RemoteKey
+from basal.ble_ids import CommandId
 
 _ADV_TYPE_FLAGS = const(0x01)
 _ADV_TYPE_NAME = const(0x09)
@@ -48,14 +49,14 @@ _KEYBOARD_CHAR = (
     _FLAG_WRITE
 )
 
-_PROPERTY_CHAR = (
+_REMOTE_VALUE_CHAR = (
     bluetooth.UUID("48754773-0000-1000-8000-00805F9B34FB"),
-    _FLAG_READ | _FLAG_NOTIFY | _FLAG_INDICATE | _FLAG_WRITE | _FLAG_WRITE_NO_RESPONSE,
+    _FLAG_NOTIFY | _FLAG_INDICATE
 )
 
 _HUGO_SERVICE = (
     bluetooth.UUID("4875476F-0000-1000-8000-00805F9B34FB"),
-    (_SHELL_COMMAND_CHAR, _LOG_CHAR, _KEYBOARD_CHAR),
+    (_SHELL_COMMAND_CHAR, _LOG_CHAR, _KEYBOARD_CHAR, _REMOTE_VALUE_CHAR),
 )
 
 #FIXME
@@ -74,9 +75,11 @@ class BleLogger(LoggerBase):
 class Ble():
   _ble = None
   _shell = None
+  _properties = None
   _keyboard = None
-  _shell_command_handle = None
+  _command_handle = None
   _log_handle = None
+  _remote_value_handle = None
   _keyboard_handle = None
   _initial_time_up = None
   _running_time_up = None
@@ -144,7 +147,7 @@ class Ble():
     cls._ble.irq(cls._irq)
 
     #cls._ble.config(mtu=_BMS_MTU)
-    ((cls._shell_command_handle, cls._log_handle, cls._keyboard_handle), ) = cls._ble.gatts_register_services((_HUGO_SERVICE,))
+    ((cls._command_handle, cls._log_handle, cls._keyboard_handle, cls._remote_value_handle), ) = cls._ble.gatts_register_services((_HUGO_SERVICE,))
     cls._connections = set()
     cls._payload = cls.advertising_payload(
         name="HuGo", services=[_HUGO_SERVICE], appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER
@@ -158,11 +161,18 @@ class Ble():
     cls._ble.active(False)
 
   @classmethod
-  def get_shell(cls):
+  def get_shell(cls): #saving RAM shell and properties are ussually not loaded together
     if not cls._shell:
       from basal.shell import Shell
       cls._shell = Shell()
     return cls._shell
+
+  @classmethod
+  def get_properties(cls):
+    if not cls._properties:
+      from blocks.block_properties import BlockProperties
+      cls._properties = BlockProperties()
+    return cls._properties
 
   @classmethod
   def _irq(cls, event, data):
@@ -174,7 +184,7 @@ class Ble():
       for _ in range(3): #sometimes attempts to exchange mtu fails
         try:
           cls._ble.gattc_exchange_mtu(conn_handle)
-          connected =True
+          connected = True
           cls._time_to_power_save = 0 # disable power save while a connection is active
           break
         except Exception:
@@ -199,9 +209,15 @@ class Ble():
     elif event == _IRQ_GATTS_WRITE:
       conn_handle, value_handle = data
       value = cls._ble.gatts_read(value_handle)
-      if value_handle == cls._shell_command_handle:
-        shell = cls.get_shell()
-        ret_data = shell.command_request(value)
+      if value_handle == cls._command_handle and value and len(value) > 0:
+        command = value[0]
+        data = value[1:]
+        #if command < CommandId.cmd_shell_last:
+        command_solver = cls.get_shell()
+        #else:
+        #  command_solver = cls.get_properties()
+
+        ret_data = command_solver.command_request(command, data)
         if ret_data is not None:
           cls._ble.gatts_notify(conn_handle, value_handle, ret_data)
 
@@ -258,3 +274,8 @@ class Ble():
   def notify_log(cls, message):
     for connection in cls._connections:
       cls._ble.gatts_notify(connection, cls._log_handle, message)
+
+  @classmethod
+  def notify_remote_value(cls, message):
+    for connection in cls._connections:
+      cls._ble.gatts_notify(connection, cls._remote_value_handle, message)

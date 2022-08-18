@@ -17,7 +17,7 @@ class Conditions():
 
 class ActiveVariable():
   logging = Logging("act_var")
-  def __init__(self, initial_value=None, renew_period=0, renew_func=None):
+  def __init__(self, initial_value=None, renew_period:float=0, renew_func=None):
     """
     @param initial_value: if is set Active variable will be preset to this value
     @param renew_period: renew_func will be called with this period if this value > 0
@@ -190,3 +190,6 @@ class ActiveVariable():
     a value is measured
     """
     return self._add_listener((self._handle_count, Conditions.value_updated, repetitive, function, args, kwargs))
+
+  def __str__(self):
+    return str(self.get())

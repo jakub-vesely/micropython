@@ -43,21 +43,7 @@ class PowerBlock(BlockWithOneExtension):
     self.battery_voltage = ActiveQuantity(Voltage(), 0, measurement_period, self._get_voltage)
     self.battery_current = ActiveQuantity(Current(), 0, measurement_period, self._get_current_A)
 
-    self._remote_variables = {
-        "is_usb_connected": self.is_usb_connected,
-        "is_charging": self.is_charging,
-        "battery_voltage": self.battery_voltage,
-        "battery_current": self.battery_current
-    }
-
     self._ina_init()
-
-  def get_remote_variables(self):
-    return self._remote_variables
-
-  def _register_variable(self, active_variable:ActiveVariable, alias: str="", quantity:str=""):
-    self.active_variables.append(active_variable)
-    return active_variable
 
   def _ina_init(self):
     if not self.ext_address:

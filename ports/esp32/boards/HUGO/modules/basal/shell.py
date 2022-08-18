@@ -6,19 +6,10 @@ import hashlib
 from basal.logging import Logging
 from blocks.main_block import MainBlock
 from basal.planner import Planner
+from basal.ble_ids import CommandId
+
 #pyright: reportMissingImports=false
 #pylint: disable=no-name-in-module ;implemented in micropython
-from micropython import const
-
-_cmd_version            = const(0x80)
-_cmd_stop_program       = const(0x81)
-_cmd_start_program      = const(0x82)
-_cmd_get_next_file_info = const(0x83)
-_cmd_remove_file        = const(0x84)
-_cmd_handle_file        = const(0x85)
-_cmd_get_file_checksum  = const(0x86)
-_cmd_append             = const(0x87)
-_cmd_mk_dir             = const(0x88)
 
 class Shell():
   _b_false = b"\0"
@@ -128,64 +119,59 @@ class Shell():
       self.path.append(name)
       return self._get_next_file_info()
 
-  def command_request(self, data):
-    if data and len(data) > 0:
-      command = data[0]
-      if command == _cmd_version:
-        return self._b_true
+  def command_request(self, command, data):
+    if command == CommandId.common_version:
+      return self._b_true
 
-      elif command == _cmd_stop_program:
-        print("cmd_stop_program")
-        if self.file_exists(self.events_file_name):
-          print("events_file will be renamed")
-          self.rename_file(self.events_file_name, "." + self.events_file_name)
-          print("events_file renamed")
-        print("reboot planned")
-        Planner.postpone(0.1, self._reboot)
-        return self._b_true
+    elif command == CommandId.shell_stop_program:
+      print("cmd_stop_program")
+      if self.file_exists(self.events_file_name):
+        print("events_file will be renamed")
+        self.rename_file(self.events_file_name, "." + self.events_file_name)
+        print("events_file renamed")
+      print("reboot planned")
+      Planner.postpone(0.1, self._reboot)
+      return self._b_true
 
-      elif command == _cmd_start_program:
-        return self._b_true if self._import_events() else self._b_false
+    elif command == CommandId.shell_start_program:
+      return self._b_true if self._import_events() else self._b_false
 
-      elif command == _cmd_get_next_file_info:
-        return self._get_next_file_info()
+    elif command == CommandId.shell_get_next_file_info:
+      return self._get_next_file_info()
 
-      elif command == _cmd_remove_file:
-        file_path = data[1:]
-        self.remove_file(file_path)
-        return self._b_true
+    elif command == CommandId.shell_remove_file:
+      self.remove_file(data)
+      return self._b_true
 
-      elif command == _cmd_handle_file:
-        self.handeled_file_path = data[1:]
-        self.new_file = True
-        return self._b_true
+    elif command == CommandId.shell_handle_file:
+      self.handeled_file_path = data
+      self.new_file = True
+      return self._b_true
 
-      elif command == _cmd_get_file_checksum:
-        return self._get_file_checksum(self.handeled_file_path)
+    elif command == CommandId.shell_get_file_checksum:
+      return self._get_file_checksum(self.handeled_file_path)
 
-      elif command == _cmd_append:
-        data = data[1:]
-        if self.new_file:
-          #print("path:" + str(self.handeled_file_path))
-          file = open(self.handeled_file_path, "wb")
-          self.new_file = False
-        else:
-          file = open(self.handeled_file_path, "ab")
-
-        file.write(data)
-        file.close()
-        return self._b_true
-
-      elif command == _cmd_mk_dir:
-        path = data[1:]
-        try:
-          #print("mkdir..." + path.decode("utf-8"))
-          os.mkdir(path)
-          #print("mkdir Done")
-        except Exception:
-          #print("mkdir dir exists")
-          return self._b_false
-        return self._b_true
-
+    elif command == CommandId.shell_append:
+      if self.new_file:
+        #print("path:" + str(self.handeled_file_path))
+        file = open(self.handeled_file_path, "wb")
+        self.new_file = False
       else:
-        return None
+        file = open(self.handeled_file_path, "ab")
+
+      file.write(data)
+      file.close()
+      return self._b_true
+
+    elif command == CommandId.shell_mk_dir:
+      try:
+        #print("mkdir..." + path.decode("utf-8"))
+        os.mkdir(data)
+        #print("mkdir Done")
+      except Exception:
+        #print("mkdir dir exists")
+        return self._b_false
+      return self._b_true
+
+    else:
+      return None
