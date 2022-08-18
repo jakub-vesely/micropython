@@ -7,14 +7,12 @@ from micropython import const
 import typing
 
 from basal.logging import Logging
-from blocks.block_list import BlockList
 from blocks.block_types import BlockType
 
 _power_save_command = const(0xf6)
 _get_module_version_command = const(0xf7)
 _change_i2c_address_command =  const(0xfe)
 _i2c_block_type_id_base = const(0xFA)
-
 
 class PowerSaveLevel:
   NoPowerSave = 0    # powersave is off
@@ -25,15 +23,12 @@ class BlockBase:
   i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
 
   def __init__(self, block_type: BlockType, address: int):
-    BlockList.add_block(self)
     self.type_id = block_type.id
     self.address = address if address else block_type.id #default block i2c address is equal to its block type
 
-    self.active_variables = list()
     self.block_type_valid = False
-    self.logging = Logging(block_type.name)
+    self.logging = Logging(block_type.name.decode("utf-8"))
     self.block_version = self._get_block_version()
-    self.remote_variables = {}
 
     self.power_save_level = PowerSaveLevel.NoPowerSave
     self._tiny_write_base_id(_power_save_command, self.power_save_level.to_bytes(1, 'big'), True) #wake up block functionality
