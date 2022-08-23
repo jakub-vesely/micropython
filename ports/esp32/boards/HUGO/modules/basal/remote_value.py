@@ -1,25 +1,34 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-from basal.ble_ids import RemoteValueId
-from basal.ble import Ble
+import basal.ble_ids as ble_ids
 from basal.active_variable import ActiveVariable
-
+from basal.logging import Logging
+from basal.planner import Planner
 class RemoteValue():
   remoteIds = {}
-  @classmethod
-  def _send(cls, message_id:int, message:bytes):
-    Ble.notify_remote_value(message_id.to_bytes(1, 'big') + message)
 
   @classmethod
-  def _info(cls, remote_id_bytes, activeVariable:ActiveVariable):
-    cls._send(RemoteValueId.info, remote_id_bytes + b"\x01" + str(activeVariable).encode("utf-8"))
+  def _info(cls, message_id:str, activeVariable:ActiveVariable):
+    Logging(message_id).value(str(activeVariable))
 
   @classmethod
   def add(cls, remote_id:str, active_variable:ActiveVariable):
     if remote_id in cls.remoteIds:
       return False
-    remote_id_bytes = remote_id.encode("utf-8")
-    cls.remoteIds[remote_id_bytes] = active_variable.changed(True, RemoteValue._info, remote_id_bytes, active_variable)
-    cls._send(RemoteValueId.added, remote_id_bytes)
+
+    cls.remoteIds[remote_id] = (active_variable, active_variable.changed(True, RemoteValue._info, remote_id, active_variable))
     return True
+
+  @classmethod
+  def _get_all(cls):
+    for remote_id, value in cls.remoteIds.items():
+      cls._info(remote_id, value[0])
+
+  @classmethod
+  def command_request(cls, command, data):
+    if command == ble_ids.cmd_remote_val_get_all:
+      Planner.plan(cls._get_all)
+      return ble_ids.b_true
+    return ble_ids.b_false
+
