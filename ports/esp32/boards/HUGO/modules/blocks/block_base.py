@@ -1,9 +1,9 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
-import machine
+import machine   # type: ignore
 import time
-from micropython import const
+from micropython import const   # type: ignore
 import typing
 
 from basal.logging import Logging
