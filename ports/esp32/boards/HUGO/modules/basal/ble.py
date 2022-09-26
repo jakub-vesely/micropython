@@ -255,6 +255,10 @@ class Ble():
       print("unhandled event: " + str(event))
 
   @classmethod
+  def is_connected(cls):
+    return len(cls._connections) > 0;
+
+  @classmethod
   def advertising_payload(limited_disc=False, br_edr=False, name=None, services=None, appearance=0):
     payload = bytearray()
 
