@@ -11,7 +11,7 @@ class SmoothedVariable(ActiveVariable):
   def __init__(self, count:int, _type:SmoothingType, active_variable:ActiveVariable = None):
     super().__init__(active_variable.get(False))
     self._active_variable = active_variable
-    self._active_variable.updated(True, self._original_variable_updated)
+    self._active_variable.updated(self._original_variable_updated)
     self._count = count
     self._type = _type
     self._values = [active_variable._value] if active_variable._value is not None else []

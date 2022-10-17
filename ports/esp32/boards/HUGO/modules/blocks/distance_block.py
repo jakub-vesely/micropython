@@ -5,7 +5,7 @@ from blocks.block_types import BlockTypes
 from blocks.extended_block_base import BlockWithOneExtension
 from blocks.block_base import PowerSaveLevel
 from basal.active_variable import ActiveVariable
-from blocks.vl53l1x import VL53L1X
+from _vl53l1x import VL53L1X
 
 class DistanceBlock(BlockWithOneExtension):
 
