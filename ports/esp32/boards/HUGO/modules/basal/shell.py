@@ -6,7 +6,7 @@ import hashlib
 from basal.logging import Logging
 from blocks.main_block import MainBlock
 from basal.planner import Planner
-import basal.ble_ids as ble_ids
+from basal import ble_ids as ble_ids
 from basal.ble import Ble
 
 #pyright: reportMissingImports=false
@@ -38,9 +38,11 @@ class Shell():
       return False
 
   @classmethod
-  def create_file(cls, file_path):
-    with open(file_path, "w"):
-      pass
+  def create_file(cls, file_path, content=None):
+    with open(file_path, "wb") as file:
+      if content:
+        file.write(content)
+
 
   @classmethod
   def remove_file(cls, file_path):
@@ -102,6 +104,14 @@ class Shell():
       yield data
 
   @classmethod
+  def get_file_content(cls, file_path):
+    if not cls._is_file(file_path):
+      return None
+
+    with open(file_path, "rb") as file:
+      return file.read()
+
+  @classmethod
   def _get_file_checksum(cls, file_path):
     sha1 = hashlib.sha1(b"")
     with open(file_path, "rb") as file:
@@ -116,6 +126,7 @@ class Shell():
   def _get_path(cls):
     path = ""
     for item in cls.path:
+
       path += item + "/"
     return path
 

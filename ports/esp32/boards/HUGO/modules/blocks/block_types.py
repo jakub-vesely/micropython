@@ -11,6 +11,6 @@ class BlockTypes:
   sound = BlockType(0x0c, "sound_block")
   buttom = BlockType(0x0d, "button_block")
   distance = BlockType(0x0e, "distance_block")
-  position = BlockType(0x0f, "position_block")
+  motion_tracking = BlockType(0x0f, "motion_tracking")
   ir = BlockType(0x10, "ir_block")
   #ambient = BlockType(0x10, "ambient_block")
