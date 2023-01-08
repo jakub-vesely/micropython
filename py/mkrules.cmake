@@ -193,7 +193,7 @@ if(MICROPY_FROZEN_MANIFEST)
     # to automatically build mpy-cross if needed.
     set(MICROPY_MPYCROSS $ENV{MICROPY_MPYCROSS})
     if(NOT MICROPY_MPYCROSS)
-        set(MICROPY_MPYCROSS_DEPENDENCY ${MICROPY_DIR}/mpy-cross/mpy-cross)
+        set(MICROPY_MPYCROSS_DEPENDENCY ${MICROPY_DIR}/mpy-cross/build/mpy-cross)
         if(NOT MICROPY_MAKE_EXECUTABLE)
             set(MICROPY_MAKE_EXECUTABLE make)
         endif()
@@ -221,5 +221,11 @@ if(ECHO_SUBMODULES)
     # Note: the GIT_SUBMODULES is done via echo rather than message, as message splits
     # the output onto multiple lines
     execute_process(COMMAND ${CMAKE_COMMAND} -E echo "GIT_SUBMODULES=${GIT_SUBMODULES}")
+    message(FATAL_ERROR "Done")
+endif()
+
+# Display BOARD_VARIANTS
+if(ECHO_BOARD_VARIANTS)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E echo "BOARD_VARIANTS=${BOARD_VARIANTS}")
     message(FATAL_ERROR "Done")
 endif()

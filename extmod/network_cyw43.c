@@ -244,13 +244,18 @@ STATIC mp_obj_t network_cyw43_connect(size_t n_args, const mp_obj_t *pos_args, m
         args[ARG_security] = args[ARG_auth];
     }
 
+    // Extract the SSID.
     mp_buffer_info_t ssid;
     mp_get_buffer_raise(args[ARG_ssid].u_obj, &ssid, MP_BUFFER_READ);
+
+    // Extract the key, if given.
     mp_buffer_info_t key;
     key.buf = NULL;
     if (args[ARG_key].u_obj != mp_const_none) {
         mp_get_buffer_raise(args[ARG_key].u_obj, &key, MP_BUFFER_READ);
     }
+
+    // Extract the BSSID, if given.
     mp_buffer_info_t bssid;
     bssid.buf = NULL;
     if (args[ARG_bssid].u_obj != mp_const_none) {
@@ -259,8 +264,26 @@ STATIC mp_obj_t network_cyw43_connect(size_t n_args, const mp_obj_t *pos_args, m
             mp_raise_ValueError(NULL);
         }
     }
+
+    // Extract the security type, if given.
+    uint32_t auth_type;
+    if (args[ARG_security].u_int == -1) {
+        if (key.buf == NULL || key.len == 0) {
+            auth_type = 0; // open security
+        } else {
+            #if MICROPY_PY_NETWORK_CYW43_USE_LIB_DRIVER
+            auth_type = CYW43_AUTH_WPA2_MIXED_PSK;
+            #else
+            auth_type = 0x008006; // WPA2_MIXED_PSK
+            #endif
+        }
+    } else {
+        auth_type = args[ARG_security].u_int;
+    }
+
+    // Start the WiFi join procedure.  It will run in the background.
     int ret = cyw43_wifi_join(self->cyw, ssid.len, ssid.buf, key.len, key.buf,
-        args[ARG_security].u_int, bssid.buf, args[ARG_channel].u_int);
+        auth_type, bssid.buf, args[ARG_channel].u_int);
     if (ret != 0) {
         mp_raise_OSError(-ret);
     }
@@ -496,12 +519,13 @@ STATIC const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(network_cyw43_locals_dict, network_cyw43_locals_dict_table);
 
-const mp_obj_type_t mp_network_cyw43_type = {
-    { &mp_type_type },
-    .name = MP_QSTR_CYW43,
-    .print = network_cyw43_print,
-    .make_new = network_cyw43_make_new,
-    .locals_dict = (mp_obj_dict_t *)&network_cyw43_locals_dict,
-};
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_network_cyw43_type,
+    MP_QSTR_CYW43,
+    MP_TYPE_FLAG_NONE,
+    make_new, network_cyw43_make_new,
+    print, network_cyw43_print,
+    locals_dict, &network_cyw43_locals_dict
+    );
 
 #endif // MICROPY_PY_NETWORK_CYW43

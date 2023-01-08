@@ -45,6 +45,7 @@ PYTHON = python3
 
 AS = $(CROSS_COMPILE)as
 CC = $(CROSS_COMPILE)gcc
+CPP = $(CC) -E
 CXX = $(CROSS_COMPILE)g++
 GDB = $(CROSS_COMPILE)gdb
 LD = $(CROSS_COMPILE)ld
@@ -61,7 +62,7 @@ MPY_LIB_SUBMODULE_DIR = $(TOP)/lib/micropython-lib
 MPY_LIB_DIR = $(MPY_LIB_SUBMODULE_DIR)
 
 ifeq ($(MICROPY_MPYCROSS),)
-MICROPY_MPYCROSS = $(TOP)/mpy-cross/mpy-cross
+MICROPY_MPYCROSS = $(TOP)/mpy-cross/build/mpy-cross
 MICROPY_MPYCROSS_DEPENDENCY = $(MICROPY_MPYCROSS)
 endif
 
