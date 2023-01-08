@@ -94,8 +94,10 @@ set(MICROPY_SOURCE_LIB
     ${MICROPY_DIR}/shared/runtime/pyexec.c
     ${MICROPY_DIR}/shared/runtime/stdout_helpers.c
     ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
-    ${MICROPY_DIR}/shared/runtime/tinyusb_helpers.c
     ${MICROPY_DIR}/shared/timeutils/timeutils.c
+    ${MICROPY_DIR}/shared/tinyusb/mp_cdc_common.c
+    ${MICROPY_DIR}/shared/tinyusb/mp_usbd.c
+    ${MICROPY_DIR}/shared/tinyusb/mp_usbd_descriptor.c
 )
 
 set(MICROPY_SOURCE_DRIVERS
@@ -125,8 +127,8 @@ set(MICROPY_SOURCE_PORT
     pendsv.c
     rp2_flash.c
     rp2_pio.c
-    tusb_port.c
     uart.c
+    usbd.c
     msc_disk.c
     mbedtls/mbedtls_port.c
 )
@@ -232,6 +234,11 @@ if(MICROPY_BLUETOOTH_NIMBLE)
     get_target_property(NIMBLE_INCLUDE micropy_extmod_nimble INTERFACE_INCLUDE_DIRECTORIES)
     list(APPEND MICROPY_INC_CORE ${NIMBLE_INCLUDE})
 endif()
+
+# tinyusb helper
+target_include_directories(${MICROPY_TARGET} PRIVATE
+    ${MICROPY_DIR}/shared/tinyusb/
+)
 
 if (MICROPY_PY_NETWORK_CYW43)
     string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/cyw43-driver)
@@ -412,9 +419,11 @@ endif()
 
 pico_add_extra_outputs(${MICROPY_TARGET})
 
+pico_find_compiler(PICO_COMPILER_SIZE ${PICO_GCC_TRIPLE}-size)
+
 add_custom_command(TARGET ${MICROPY_TARGET}
     POST_BUILD
-    COMMAND arm-none-eabi-size --format=berkeley ${PROJECT_BINARY_DIR}/${MICROPY_TARGET}.elf
+    COMMAND ${PICO_COMPILER_SIZE} --format=berkeley ${PROJECT_BINARY_DIR}/${MICROPY_TARGET}.elf
     VERBATIM
 )
 

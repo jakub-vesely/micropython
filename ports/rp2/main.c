@@ -43,6 +43,7 @@
 #include "modrp2.h"
 #include "mpbthciport.h"
 #include "genhdr/mpversion.h"
+#include "mp_usbd.h"
 
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
@@ -66,7 +67,7 @@
 #endif
 
 extern uint8_t __StackTop, __StackBottom;
-static char gc_heap[MICROPY_GC_HEAP_SIZE];
+__attribute__((section(".uninitialized_bss"))) static char gc_heap[MICROPY_GC_HEAP_SIZE];
 
 // Embed version info in the binary in machine readable form
 bi_decl(bi_program_version_string(MICROPY_GIT_TAG));
@@ -85,7 +86,9 @@ int main(int argc, char **argv) {
     #endif
 
     #if MICROPY_HW_ENABLE_USBDEV
+    #if MICROPY_HW_USB_CDC
     bi_decl(bi_program_feature("USB REPL"))
+    #endif
     tusb_init();
     #endif
 

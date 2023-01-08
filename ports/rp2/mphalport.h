@@ -33,6 +33,7 @@
 #include "RP2040.h" // cmsis, for __WFI
 
 #define SYSTICK_MAX (0xffffff)
+#define MICROPY_HW_USB_CDC_TX_TIMEOUT (500)
 
 extern int mp_interrupt_char;
 extern ringbuf_t stdin_ringbuf;
@@ -147,6 +148,8 @@ enum mp_hal_pin_interrupt_trigger {
 };
 
 void mp_hal_pin_interrupt(mp_hal_pin_obj_t pin, mp_obj_t handler, mp_uint_t trigger, bool hard);
+
+mp_obj_base_t *mp_hal_get_spi_obj(mp_obj_t spi_in);
 
 enum {
     MP_HAL_MAC_WLAN0 = 0,
