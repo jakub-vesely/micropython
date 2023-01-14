@@ -63,7 +63,7 @@ class DisplayBlock(BlockWithOneExtension):
     if self._display:
       self._display.rotate(not value)
 
-  def contrast(self, value:bool):
+  def contrast(self, value:int):
     """
     param: contrast in range 0..255
     """
