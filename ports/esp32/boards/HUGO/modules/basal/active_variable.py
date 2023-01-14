@@ -19,9 +19,12 @@ class ActiveVariable():
   logging = Logging("act_var")
   def __init__(self, initial_value=None, renew_period:float=0, renew_func=None, ignore_same=True, change_threshold=None):
     """
-    @param initial_value: if is set Active variable will be preset to this value
+    @param initial_value: if it is set the Active variable will be preset to this value.
+      if the default value is set to None value call function will not be called in after
+      the first update although the condition is met
     @param renew_period: renew_func will be called with this period if this value > 0
-    @param renew_func: this method will be called periodically if renew_period is > 0 or if get is called with the parameter "force"
+    @param renew_func: this method will be called periodically if renew_period is > 0 or
+      if get is called with the parameter "force"
     @param ignore_same: does not call listener function when value does not change although the condition is met".
       Value updated listener is executed anyway.
     @param change_threshold: if a change listener is defined the threshold will be added to its comparison.

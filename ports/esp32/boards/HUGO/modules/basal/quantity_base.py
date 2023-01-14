@@ -75,4 +75,4 @@ class QuantityBase():
         return final_str
 
     def get_full_str(self, value):
-        return self.name + " = " + self.get_value_str(value)
+        return self.name + ": " + self.get_value_str(value)

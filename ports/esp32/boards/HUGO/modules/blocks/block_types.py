@@ -13,4 +13,4 @@ class BlockTypes:
   distance = BlockType(0x0e, "distance_block")
   motion_tracking = BlockType(0x0f, "motion_tracking")
   ir = BlockType(0x10, "ir_block")
-  #ambient = BlockType(0x10, "ambient_block")
+  meteo = BlockType(0x11, "meteo_block")
