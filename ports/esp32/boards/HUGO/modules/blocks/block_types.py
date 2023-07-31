@@ -14,3 +14,4 @@ class BlockTypes:
   motion_tracking = BlockType(0x0f, "motion_tracking")
   ir = BlockType(0x10, "ir_block")
   meteo = BlockType(0x11, "meteo_block")
+  ble = BlockType(0x12, "ble_block")
