@@ -87,7 +87,11 @@ class BlockBase:
     if self._check_type(type_id):
       self._raw_tiny_write(type_id, command, in_data, silent)
       try:
-        data = self.i2c.readfrom(self.address, expected_length, True)
+        if expected_length == 0:
+          data = self.i2c.readfrom(self.address, 255, True)
+          data = data[1: data[0]+1]
+        else:
+          data = self.i2c.readfrom(self.address, expected_length, True)
         return data
       except OSError:
         if not silent:
