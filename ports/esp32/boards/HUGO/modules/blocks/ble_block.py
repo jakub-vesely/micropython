@@ -35,7 +35,7 @@ class BleBlock(BlockBase):
   def _read_message(self, message_type, timeout):
     step = 0.01 #sec
     while (timeout >= 0):
-      message = self._tiny_read(message_type, None, 0)
+      message = self._tiny_read(message_type, None, -1)
       if message:
         return message
       time.sleep(step if timeout > step else timeout)
@@ -47,7 +47,6 @@ class BleBlock(BlockBase):
 
   def read_mesh_message(self, timeout=0):
     return self._read_message(self.mesh_data_id, timeout)
-
 
   def send_mesh_message(self, target_id:int, message:bytes):
     # it seems mesh with ack is not reliable +ACK=OK is sometimes not delivered when mesh message is
