@@ -21,3 +21,12 @@ class ActiveQuantity(ActiveVariable):
 
     def get_str_to_fit(self, size):
         return self.quantity.get_value_str(self.get(), size)
+
+    def get_name(self):
+        return self.quantity.name
+
+    def set_with_units(self, value, unit):
+        multiplier = 1;
+        if (unit in self.quantity.units):
+            multiplier = self.quantity.units[unit]
+        self.set(value * multiplier)
