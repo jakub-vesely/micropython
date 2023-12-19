@@ -11,14 +11,14 @@ from quantities.humidity import RelativeHumidity
 from quantities.pressure import Pressure
 from bme280_float import BME280
 
-class MeteoBlock(BlockWithOneExtension):
+class AmbientBlock(BlockWithOneExtension):
 
   def __init__(self, address: int=None, measurement_period: float=10):
     """
     @param address:block address
     @param measurement_period: sampling frequency in sec
     """
-    super().__init__(BlockTypes.meteo, address)
+    super().__init__(BlockTypes.ambient, address)
     self._value = ActiveVariable((None, None, None), measurement_period, self._get_value)
     self._value.updated(self._fill_values)
     self.temperature = ActiveQuantity(Temperature(precision=3), change_threshold=0.1);
