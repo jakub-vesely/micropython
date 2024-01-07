@@ -17,7 +17,7 @@ class RemoteValue():
     if remote_id in cls.remoteIds:
       return False
 
-    cls.remoteIds[remote_id] = (active_variable, active_variable.changed(RemoteValue._info, remote_id, active_variable))
+    cls.remoteIds[remote_id] = (active_variable, active_variable.updated(RemoteValue._info, remote_id, active_variable))
     return True
 
   @classmethod
