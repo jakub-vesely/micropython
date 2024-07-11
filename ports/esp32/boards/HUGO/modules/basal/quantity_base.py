@@ -13,11 +13,16 @@ class QuantityBase():
         self.precision = precision
 
     def _get_penalty(self, value):
+        if value == 0:
+            return 0
+
         abs_value = abs(value)
         if abs_value >= 1:
             for multiplier in range(1, 99): #just a number big enough
                 if abs_value / float(pow(10, multiplier)) < 1:
-                    return multiplier
+                    remainder_mult = self._get_penalty(abs_value - int(abs_value)) / 10
+                    remainder_mult += 1 if remainder_mult > 0 else 0  # 1 for dot
+                    return multiplier + remainder_mult
         else:
             for multiplier in range(1, 99): #just a number big enough
                 if abs_value * multiplier * 10 > 1:

@@ -189,7 +189,7 @@ class Ble():
   @classmethod
   def process_command(cls, conn_handle, value_handle, command, data):
     if command < ble_ids.cmd_shell_last:
-        command_solver = cls.get_shell()
+      command_solver = cls.get_shell()
     else:
       command_solver = cls.get_remote_value()
 
