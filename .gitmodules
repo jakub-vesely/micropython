@@ -68,3 +68,9 @@
 [submodule "lib/arduino-lib"]
 	path = lib/arduino-lib
 	url = https://github.com/arduino/arduino-lib-mpy.git
+[submodule "ports/esp32/boards/HUGO/externals/mpu9250"]
+	path = ports/esp32/boards/HUGO/externals/mpu9250
+	url = git@github.com:jakub-vesely/micropython-mpu9250.git
+[submodule "ports/esp32/boards/HUGO/externals/BME280"]
+	path = ports/esp32/boards/HUGO/externals/BME280
+	url = git@github.com:jakub-vesely/BME280.git
