@@ -1,0 +1,10 @@
+#define MICROPY_HW_BOARD_NAME "HuGo module"
+#define MICROPY_HW_MCU_NAME "micro-32"
+
+#define MP_BLUETOOTH_DEFAULT_ATTR_LEN (512)
+
+//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+
+
+
+
