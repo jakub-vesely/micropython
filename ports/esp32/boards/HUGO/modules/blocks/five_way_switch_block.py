@@ -41,3 +41,10 @@ class FiveWaySwitchBlock(BlockBase):
       return self.button_none
 
     return self.states[button_id[0]]
+
+  def get_button_raw_value(self):
+    raw_value = self._tiny_read(_i2c_command_button_value, None, 1)
+    if raw_value is None or len(raw_value) != 1:
+      return 0
+
+    return raw_value[0];

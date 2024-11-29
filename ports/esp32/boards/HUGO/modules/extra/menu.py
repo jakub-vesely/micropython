@@ -2,10 +2,11 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 class MenuItem():
-    def __init__(self, label:str, submenu:list=None, function:callable=None) -> None:
+    def __init__(self, label:str, submenu:list=None, function:callable=None, args:list=None) -> None:
         self.label = label
         self.submenu = submenu
         self.function = function
+        self.args = args
 
 class Menu():
     def __init__(self, hierarchy:list):
