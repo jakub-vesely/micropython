@@ -28,7 +28,7 @@ class FiveWaySwitchBlock(BlockBase):
 
 
   def __init__(self, address=None, measurement_period: float=0.1):
-    super().__init__(BlockTypes.buttom, address)  # type: ignore
+    super().__init__(BlockTypes.button, address)  # type: ignore
     self.value = ActiveVariable(False, measurement_period, self._button_id)
 
   def _button_id(self):
