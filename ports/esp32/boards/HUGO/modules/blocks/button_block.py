@@ -11,7 +11,7 @@ _is_pressed_command = const(0x01)
 class ButtonBlock(BlockBase):
 
   def __init__(self, address=None, measurement_period: float=0.1):
-    super().__init__(BlockTypes.buttom, address)   # type: ignore
+    super().__init__(BlockTypes.button, address)   # type: ignore
     self.value = ActiveVariable(False, measurement_period, self._is_pressed)
 
   def _is_pressed(self):
