@@ -37,6 +37,7 @@
 #include "modmachine.h"
 #include "pin.h"
 
+#define DEFAULT_UART_ID  (1)
 #define DEFAULT_UART_BAUDRATE (115200)
 #define DEFAULT_BUFFER_SIZE (256)
 #define MIN_BUFFER_SIZE  (32)
@@ -50,6 +51,10 @@
 #define UART_INVERT_RX (2)
 #define UART_INVERT_MASK (UART_INVERT_TX | UART_INVERT_RX)
 
+#define UART_IRQ_RXIDLE  (1)
+#define UART_IRQ_TXIDLE  (2)
+#define MP_UART_ALLOWED_FLAGS (UART_IRQ_RXIDLE | UART_IRQ_TXIDLE)
+
 typedef struct _machine_uart_obj_t {
     mp_obj_base_t base;
     struct _lpuart_handle handle;
@@ -62,7 +67,12 @@ typedef struct _machine_uart_obj_t {
     uint16_t tx_status;
     uint8_t *txbuf;
     uint16_t txbuf_len;
+    uint8_t *rxbuf;
+    uint16_t rxbuf_len;
     bool new;
+    uint16_t mp_irq_trigger;   // user IRQ trigger mask
+    uint16_t mp_irq_flags;     // user IRQ active IRQ flags
+    mp_irq_obj_t *mp_irq_obj;  // user IRQ object
 } machine_uart_obj_t;
 
 typedef struct _iomux_table_t {
@@ -126,7 +136,7 @@ bool lpuart_set_iomux_cts(int8_t uart) {
     int index = (uart - 1) * 2;
 
     if (CTS.muxRegister != 0) {
-        IOMUXC_SetPinMux(CTS.muxRegister, CTS.muxMode, CTS.inputRegister, CTS.inputDaisy, CTS.configRegister, 0U);
+        IOMUXC_SetPinMux(CTS.muxRegister, CTS.muxMode, CTS.inputRegister, CTS.inputDaisy, CTS.configRegister, 1U);
         IOMUXC_SetPinConfig(CTS.muxRegister, CTS.muxMode, CTS.inputRegister, CTS.inputDaisy, CTS.configRegister,
             pin_generate_config(PIN_PULL_UP_100K, PIN_MODE_IN, PIN_DRIVE_6, CTS.configRegister));
         return true;
@@ -137,11 +147,21 @@ bool lpuart_set_iomux_cts(int8_t uart) {
 
 void LPUART_UserCallback(LPUART_Type *base, lpuart_handle_t *handle, status_t status, void *userData) {
     machine_uart_obj_t *self = userData;
-    if (kStatus_LPUART_TxIdle == status) {
+
+    uint16_t mp_irq_flags = 0;
+    if (status == kStatus_LPUART_TxIdle) {
         self->tx_status = kStatus_LPUART_TxIdle;
+        mp_irq_flags = UART_IRQ_TXIDLE;
+    } else if (status == kStatus_LPUART_IdleLineDetected) {
+        mp_irq_flags = UART_IRQ_RXIDLE;
+    }
+    // Check the flags to see if the user handler should be called
+    if (self->mp_irq_trigger & mp_irq_flags) {
+        self->mp_irq_flags = mp_irq_flags;
+        mp_irq_handler(self->mp_irq_obj);
     }
 
-    if (kStatus_LPUART_RxRingBufferOverrun == status) {
+    if (status == kStatus_LPUART_RxRingBufferOverrun) {
         ; // Ringbuffer full, deassert RTS if flow control is enabled
     }
 }
@@ -170,16 +190,18 @@ void machine_uart_set_baudrate(mp_obj_t uart_in, uint32_t baudrate) {
     { MP_ROM_QSTR(MP_QSTR_INV_RX), MP_ROM_INT(UART_INVERT_RX) }, \
     { MP_ROM_QSTR(MP_QSTR_CTS), MP_ROM_INT(UART_HWCONTROL_CTS) }, \
     { MP_ROM_QSTR(MP_QSTR_RTS), MP_ROM_INT(UART_HWCONTROL_RTS) }, \
+    { MP_ROM_QSTR(MP_QSTR_IRQ_RXIDLE), MP_ROM_INT(UART_IRQ_RXIDLE) }, \
+    { MP_ROM_QSTR(MP_QSTR_IRQ_TXIDLE), MP_ROM_INT(UART_IRQ_TXIDLE) }, \
 
 static void mp_machine_uart_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "UART(%u, baudrate=%u, bits=%u, parity=%s, stop=%u, flow=%s, "
-        "rxbuf=%d, txbuf=%d, timeout=%u, timeout_char=%u, invert=%s)",
+        "rxbuf=%d, txbuf=%d, timeout=%u, timeout_char=%u, invert=%s, irq=%d)",
         self->id, self->config.baudRate_Bps, 8 - self->config.dataBitsCount,
         _parity_name[self->config.parityMode], self->config.stopBitCount + 1,
         _flow_name[(self->config.enableTxCTS << 1) | self->config.enableRxRTS],
-        self->handle.rxRingBufferSize, self->txbuf_len, self->timeout, self->timeout_char,
-        _invert_name[self->invert]);
+        self->rxbuf_len, self->txbuf_len, self->timeout, self->timeout_char,
+        _invert_name[self->invert], self->mp_irq_trigger);
 }
 
 static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -272,24 +294,32 @@ static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args,
     self->config.enableRx = true;
 
     // Set the RX buffer size if configured.
-    size_t rxbuf_len = DEFAULT_BUFFER_SIZE;
     if (args[ARG_rxbuf].u_int > 0) {
-        rxbuf_len = args[ARG_rxbuf].u_int;
+        size_t rxbuf_len = args[ARG_rxbuf].u_int;
         if (rxbuf_len < MIN_BUFFER_SIZE) {
             rxbuf_len = MIN_BUFFER_SIZE;
         } else if (rxbuf_len > MAX_BUFFER_SIZE) {
             mp_raise_ValueError(MP_ERROR_TEXT("rxbuf too large"));
         }
+        // Force re-allocting of the buffer if the size changed
+        if (rxbuf_len != self->rxbuf_len) {
+            self->rxbuf = NULL;
+            self->rxbuf_len = rxbuf_len;
+        }
     }
 
     // Set the TX buffer size if configured.
-    size_t txbuf_len = DEFAULT_BUFFER_SIZE;
     if (args[ARG_txbuf].u_int > 0) {
-        txbuf_len = args[ARG_txbuf].u_int;
+        size_t txbuf_len = args[ARG_txbuf].u_int;
         if (txbuf_len < MIN_BUFFER_SIZE) {
             txbuf_len = MIN_BUFFER_SIZE;
         } else if (txbuf_len > MAX_BUFFER_SIZE) {
             mp_raise_ValueError(MP_ERROR_TEXT("txbuf too large"));
+        }
+        // Force re-allocting of the buffer if the size is changed
+        if (txbuf_len != self->txbuf_len) {
+            self->txbuf = NULL;
+            self->txbuf_len = txbuf_len;
         }
     }
 
@@ -307,6 +337,8 @@ static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args,
             self->timeout_char = min_timeout_char;
         }
 
+        self->config.rxIdleType = kLPUART_IdleTypeStartBit;
+        self->config.rxIdleConfig = kLPUART_IdleCharacter4;
         #if defined(MIMXRT117x_SERIES)
         // Use the Lpuart1 clock value, which is set for All UART devices.
         LPUART_Init(self->lpuart, &self->config, CLOCK_GetRootClockFreq(kCLOCK_Root_Lpuart1));
@@ -314,10 +346,17 @@ static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args,
         LPUART_Init(self->lpuart, &self->config, CLOCK_GetClockRootFreq(kCLOCK_UartClkRoot));
         #endif
         LPUART_TransferCreateHandle(self->lpuart, &self->handle,  LPUART_UserCallback, self);
-        uint8_t *buffer = m_new(uint8_t, rxbuf_len + 1);
-        LPUART_TransferStartRingBuffer(self->lpuart, &self->handle, buffer, rxbuf_len);
-        self->txbuf = m_new(uint8_t, txbuf_len); // Allocate the TX buffer.
-        self->txbuf_len = txbuf_len;
+        if (self->rxbuf == NULL) {
+            self->rxbuf = m_new(uint8_t, self->rxbuf_len + 1);
+        }
+        LPUART_TransferStartRingBuffer(self->lpuart, &self->handle, self->rxbuf, self->rxbuf_len);
+        if (self->txbuf == NULL) {
+            self->txbuf = m_new(uint8_t, self->txbuf_len); // Allocate the TX buffer.
+        }
+
+        #if MICROPY_PY_MACHINE_UART_IRQ
+        LPUART_EnableInterrupts(self->lpuart, kLPUART_IdleLineInterruptEnable);
+        #endif
 
         // The Uart supports inverting, but not the fsl API, so it has to coded directly
         // And it has to be done after LPUART_Init.
@@ -339,10 +378,17 @@ static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args,
 }
 
 static mp_obj_t mp_machine_uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, true);
+    mp_arg_check_num(n_args, n_kw, 0, MP_OBJ_FUN_ARGS_MAX, true);
 
     // Get UART bus.
-    int uart_id = mp_obj_get_int(args[0]);
+    int uart_id;
+    if (n_args > 0) {
+        uart_id = mp_obj_get_int(args[0]);
+        n_args--;
+        args++;
+    } else {
+        uart_id = DEFAULT_UART_ID;
+    }
     if (uart_id < 0 || uart_id > MICROPY_HW_UART_NUM || uart_index_table[uart_id] == 0) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("UART(%d) doesn't exist"), uart_id);
     }
@@ -355,7 +401,14 @@ static mp_obj_t mp_machine_uart_make_new(const mp_obj_type_t *type, size_t n_arg
     self->invert = false;
     self->timeout = 1;
     self->timeout_char = 1;
+    self->rxbuf = NULL;
+    self->rxbuf_len = DEFAULT_BUFFER_SIZE;
+    self->txbuf = NULL;
+    self->txbuf_len = DEFAULT_BUFFER_SIZE;
     self->new = true;
+    self->mp_irq_obj = NULL;
+    self->mp_irq_trigger = 0;
+
     LPUART_GetDefaultConfig(&self->config);
 
     // Configure board-specific pin MUX based on the hardware device number.
@@ -364,7 +417,7 @@ static mp_obj_t mp_machine_uart_make_new(const mp_obj_type_t *type, size_t n_arg
     if (uart_present) {
         mp_map_t kw_args;
         mp_map_init_fixed_table(&kw_args, n_kw, args + n_args);
-        mp_machine_uart_init_helper(self, n_args - 1, args + 1, &kw_args);
+        mp_machine_uart_init_helper(self, n_args, args, &kw_args);
         return MP_OBJ_FROM_PTR(self);
     } else {
         return mp_const_none;
@@ -401,6 +454,57 @@ void machine_uart_deinit_all(void) {
     }
 }
 
+#if MICROPY_PY_MACHINE_UART_IRQ
+static mp_uint_t uart_irq_trigger(mp_obj_t self_in, mp_uint_t new_trigger) {
+    machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    self->mp_irq_trigger = new_trigger;
+    return 0;
+}
+
+static mp_uint_t uart_irq_info(mp_obj_t self_in, mp_uint_t info_type) {
+    machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if (info_type == MP_IRQ_INFO_FLAGS) {
+        return self->mp_irq_flags;
+    } else if (info_type == MP_IRQ_INFO_TRIGGERS) {
+        return self->mp_irq_trigger;
+    }
+    return 0;
+}
+
+static const mp_irq_methods_t uart_irq_methods = {
+    .trigger = uart_irq_trigger,
+    .info = uart_irq_info,
+};
+
+static mp_irq_obj_t *mp_machine_uart_irq(machine_uart_obj_t *self, bool any_args, mp_arg_val_t *args) {
+    if (self->mp_irq_obj == NULL) {
+        self->mp_irq_trigger = 0;
+        self->mp_irq_obj = mp_irq_new(&uart_irq_methods, MP_OBJ_FROM_PTR(self));
+    }
+
+    if (any_args) {
+        // Check the handler
+        mp_obj_t handler = args[MP_IRQ_ARG_INIT_handler].u_obj;
+        if (handler != mp_const_none && !mp_obj_is_callable(handler)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("handler must be None or callable"));
+        }
+
+        // Check the trigger
+        mp_uint_t trigger = args[MP_IRQ_ARG_INIT_trigger].u_int;
+        mp_uint_t not_supported = trigger & ~MP_UART_ALLOWED_FLAGS;
+        if (trigger != 0 && not_supported) {
+            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("trigger 0x%04x unsupported"), not_supported);
+        }
+
+        self->mp_irq_obj->handler = handler;
+        self->mp_irq_obj->ishard = args[MP_IRQ_ARG_INIT_hard].u_bool;
+        self->mp_irq_trigger = trigger;
+    }
+
+    return self->mp_irq_obj;
+}
+#endif
+
 static mp_uint_t mp_machine_uart_read(mp_obj_t self_in, void *buf_in, mp_uint_t size, int *errcode) {
     machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint64_t t = ticks_us64() + (uint64_t)self->timeout * 1000;
@@ -423,7 +527,7 @@ static mp_uint_t mp_machine_uart_read(mp_obj_t self_in, void *buf_in, mp_uint_t 
                     return received;
                 }
             }
-            MICROPY_EVENT_POLL_HOOK
+            mp_event_wait_ms(1);
         }
         // Get as many bytes as possible to meet the need.
         nget = avail < (size - received) ? avail : size - received;
@@ -454,7 +558,7 @@ static mp_uint_t mp_machine_uart_write(mp_obj_t self_in, const void *buf_in, mp_
             *errcode = MP_ETIMEDOUT;
             return MP_STREAM_ERROR;
         }
-        MICROPY_EVENT_POLL_HOOK
+        mp_event_wait_ms(1);
     }
 
     // Check if the first part has to be sent semi-blocking.
@@ -477,7 +581,7 @@ static mp_uint_t mp_machine_uart_write(mp_obj_t self_in, const void *buf_in, mp_
                     return size - self->handle.txDataSize;
                 }
             }
-            MICROPY_EVENT_POLL_HOOK
+            mp_event_wait_ms(1);
         }
         remaining = self->txbuf_len;
     } else {
@@ -523,7 +627,7 @@ static mp_uint_t mp_machine_uart_ioctl(mp_obj_t self_in, mp_uint_t request, uint
             if (mp_machine_uart_txdone(self)) {
                 return 0;
             }
-            MICROPY_EVENT_POLL_HOOK
+            mp_event_wait_ms(1);
         } while (ticks_us64() < timeout);
 
         *errcode = MP_ETIMEDOUT;
@@ -533,4 +637,76 @@ static mp_uint_t mp_machine_uart_ioctl(mp_obj_t self_in, mp_uint_t request, uint
         ret = MP_STREAM_ERROR;
     }
     return ret;
+}
+
+// =============================================================================
+// LPUART IRQ Handler Wrapper for UART.IRQ_RXIDLE Support
+// =============================================================================
+//
+// Problem: SDK 2.16's LPUART_TransferHandleIDLEReady() only invokes the idle line callback
+// when rxDataSize != 0. MicroPython uses ring buffer mode where rxDataSize is always 0,
+// preventing IRQ_RXIDLE from ever firing.
+//
+// Solution: Use linker wrapping (see Makefile LDFLAGS) to intercept the IRQ handler and
+// handle the idle line interrupt before the SDK processes it.
+//
+// Why double wrapping is needed:
+// - The SDK's LPUART_TransferCreateHandle stores the address of LPUART_TransferHandleIRQ
+//   into the s_lpuartIsr[] dispatch table (not a direct call).
+// - GCC's --wrap flag only intercepts direct function calls, not address-of operations.
+// - Therefore we must also wrap CreateHandle to inject our IRQ wrapper's address.
+//
+// See Makefile: LDFLAGS += --wrap=LPUART_TransferCreateHandle --wrap=LPUART_TransferHandleIRQ
+//
+
+// Linker wrapper declarations - these are provided by --wrap linkage
+extern void __real_LPUART_TransferCreateHandle(LPUART_Type *base, lpuart_handle_t *handle,
+    lpuart_transfer_callback_t callback, void *userData);
+extern void __real_LPUART_TransferHandleIRQ(LPUART_Type *base, void *irqHandle);
+
+// Forward declaration of our IRQ wrapper (defined below)
+void __wrap_LPUART_TransferHandleIRQ(LPUART_Type *base, void *irqHandle);
+
+// SDK's ISR dispatch table - defined in lib/nxp_driver/sdk/drivers/lpuart/fsl_lpuart.c
+extern lpuart_isr_t s_lpuartIsr[];
+
+// Wrapper for LPUART_TransferCreateHandle to inject our IRQ wrapper into SDK's dispatch table.
+// This is called instead of the SDK's function due to --wrap=LPUART_TransferCreateHandle in Makefile.
+// After the SDK initializes, we replace s_lpuartIsr[instance] with our wrapper's address.
+void __wrap_LPUART_TransferCreateHandle(LPUART_Type *base, lpuart_handle_t *handle,
+    lpuart_transfer_callback_t callback, void *userData) {
+    // Call the real SDK function to perform normal initialization
+    __real_LPUART_TransferCreateHandle(base, handle, callback, userData);
+
+    // Override the ISR dispatch table entry with our wrapper's address
+    // (SDK stored __real_LPUART_TransferHandleIRQ, we want __wrap_LPUART_TransferHandleIRQ)
+    uint32_t instance = LPUART_GetInstance(base);
+    s_lpuartIsr[instance] = __wrap_LPUART_TransferHandleIRQ;
+}
+
+// Wrapper for LPUART_TransferHandleIRQ to handle UART.IRQ_RXIDLE in ring buffer mode.
+// This is installed into s_lpuartIsr[] by __wrap_LPUART_TransferCreateHandle above.
+// Processes the IDLE line interrupt and invokes the MicroPython callback unconditionally,
+// then calls the SDK's handler for remaining interrupt processing.
+void __wrap_LPUART_TransferHandleIRQ(LPUART_Type *base, void *irqHandle) {
+    uint32_t status = LPUART_GetStatusFlags(base);
+    uint32_t enabledInterrupts = LPUART_GetEnabledInterrupts(base);
+    lpuart_handle_t *handle = (lpuart_handle_t *)irqHandle;
+
+    // Check if IDLE flag is set and IDLE interrupt is enabled
+    if ((0U != ((uint32_t)kLPUART_IdleLineFlag & status)) &&
+        (0U != ((uint32_t)kLPUART_IdleLineInterruptEnable & enabledInterrupts))) {
+        // Clear IDLE flag to prevent SDK's handler from seeing it
+        // (SDK would disable the interrupt due to rxDataSize == 0)
+        LPUART_ClearStatusFlags(base, kLPUART_IdleLineFlag);
+        // Invoke MicroPython's idle handler callback
+        if (NULL != handle->callback) {
+            handle->callback(base, handle, kStatus_LPUART_IdleLineDetected, handle->userData);
+        } else {
+            /* Avoid MISRA 15.7 */
+        }
+    }
+
+    // Call SDK's handler for all other interrupt processing
+    __real_LPUART_TransferHandleIRQ(base, irqHandle);
 }

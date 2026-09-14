@@ -31,6 +31,8 @@ print(f"a{ {0,1,2}}")
 
 # PEP-0498 specifies that handling of double braces '{{' or '}}' should
 # behave like str.format.
+print(f'{{')
+print(f'}}')
 print(f'{{}}')
 print(f'{{{4*10}}}', '{40}')
 
@@ -65,3 +67,21 @@ print(f"{a!s:8s}")
 # Still allow ! in expressions.
 print(f"{'1' if a != '456' else '0'!r:8s}")
 print(f"{'1' if a != '456' else '0'!s:8s}")
+
+# Concatenation of adjacent f-strings.
+print(f"" f"")
+print(f"a" f"b")
+print(f"{x}" f"{y}")
+print(
+    f"a{x}b---------------------------------"
+    f"cd---------------------------------"
+    f"e{y}f---------------------------------"
+)
+
+# Raw f-strings.
+print(rf"\r\a\w {'f'} \s\t\r\i\n\g")
+print(fr"\r{x}")
+
+# Format specifiers with nested replacement fields
+radix = "x"
+print(f"{314:{radix}}")

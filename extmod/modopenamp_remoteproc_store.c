@@ -26,7 +26,7 @@
  * OpenAMP's remoteproc store.
  */
 
-#if MICROPY_PY_OPENAMP_REMOTEPROC
+#if MICROPY_PY_OPENAMP_HOST && MICROPY_PY_OPENAMP_REMOTEPROC
 
 #include "py/obj.h"
 #include "py/nlr.h"
@@ -70,12 +70,13 @@ void *mp_openamp_remoteproc_store_alloc(void) {
 static int openamp_remoteproc_store_open(void *store, const char *path, const void **image_data) {
     metal_log(METAL_LOG_DEBUG, "store_open(): %s\n", path);
     mp_obj_t args[2] = {
-        mp_obj_new_str(path, strlen(path)),
+        mp_obj_new_str_from_cstr(path),
         MP_OBJ_NEW_QSTR(MP_QSTR_rb),
     };
 
     openamp_remoteproc_filestore_t *fstore = store;
     fstore->file = mp_vfs_open(MP_ARRAY_SIZE(args), args, (mp_map_t *)&mp_const_empty_map);
+    (void)mp_get_stream_raise(fstore->file, MP_STREAM_OP_READ);
 
     int error = 0;
     mp_uint_t bytes = mp_stream_read_exactly(fstore->file, fstore->buf, RPROC_FILE_STORE_BUF_SIZE, &error);
@@ -141,4 +142,4 @@ const struct image_store_ops openamp_remoteproc_store_ops = {
 
 #endif // MICROPY_PY_OPENAMP_REMOTEPROC_STORE_ENABLE
 
-#endif // MICROPY_PY_OPENAMP_REMOTEPROC
+#endif // MICROPY_PY_OPENAMP_HOST && MICROPY_PY_OPENAMP_REMOTEPROC

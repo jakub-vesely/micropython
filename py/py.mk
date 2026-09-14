@@ -21,14 +21,11 @@ QSTR_GLOBAL_REQUIREMENTS += $(HEADER_BUILD)/mpversion.h
 # some code is performance bottleneck and compiled with other optimization options
 CSUPEROPT = -O3
 
-# Enable building 32-bit code on 64-bit host.
-ifeq ($(MICROPY_FORCE_32BIT),1)
-CC += -m32
-CXX += -m32
-LD += -m32
-endif
-
 # External modules written in C.
+
+# Process manifest for C module extraction (appends to USER_C_MODULES).
+include $(TOP)/py/manifest.mk
+
 ifneq ($(USER_C_MODULES),)
 # pre-define USERMOD variables as expanded so that variables are immediate
 # expanded as they're added to them
@@ -36,40 +33,73 @@ ifneq ($(USER_C_MODULES),)
 # C/C++ files that are included in the QSTR/module build
 SRC_USERMOD_C :=
 SRC_USERMOD_CXX :=
-# Other C/C++ files (e.g. libraries or helpers)
+# Other C/C++/Assembly files (e.g. libraries or helpers)
 SRC_USERMOD_LIB_C :=
 SRC_USERMOD_LIB_CXX :=
+SRC_USERMOD_LIB_ASM :=
 # Optionally set flags
 CFLAGS_USERMOD :=
 CXXFLAGS_USERMOD :=
 LDFLAGS_USERMOD :=
+LIBS_USERMOD :=
 
 # Backwards compatibility with older user c modules that set SRC_USERMOD
 # added to SRC_USERMOD_C below
 SRC_USERMOD :=
 
-$(foreach module, $(wildcard $(USER_C_MODULES)/*/micropython.mk), \
-    $(eval USERMOD_DIR = $(patsubst %/,%,$(dir $(module))))\
-    $(info Including User C Module from $(USERMOD_DIR))\
-	$(eval include $(module))\
+# For each C module directory, scan for micropython.mk and include it.
+# Accumulate USERMOD_DIRS so we can later strip each module's parent path
+# from its source files while preserving the module basename in the build
+# tree (e.g. build/cexample/foo.o, not build/foo.o, so files that share a
+# name across modules don't collide on the same .o target).
+USERMOD_DIRS :=
+$(foreach _UDIR, $(USER_C_MODULES), \
+    $(if $(wildcard $(_UDIR)/.),,$(error USER_C_MODULES path doesn't exist: $(abspath $(_UDIR)))) \
+    $(foreach module, $(wildcard $(_UDIR)/micropython.mk) $(wildcard $(_UDIR)/*/micropython.mk), \
+        $(eval USERMOD_DIR = $(patsubst %/,%,$(dir $(module))))\
+        $(eval USERMOD_DIRS += $(USERMOD_DIR))\
+        $(info Including User C Module from $(USERMOD_DIR))\
+        $(eval include $(module))\
+    )\
 )
 
 SRC_USERMOD_C += $(SRC_USERMOD)
 
-SRC_USERMOD_PATHFIX_C += $(patsubst $(USER_C_MODULES)/%.c,%.c,$(SRC_USERMOD_C))
-SRC_USERMOD_PATHFIX_CXX += $(patsubst $(USER_C_MODULES)/%.cpp,%.cpp,$(SRC_USERMOD_CXX))
-SRC_USERMOD_PATHFIX_LIB_C += $(patsubst $(USER_C_MODULES)/%.c,%.c,$(SRC_USERMOD_LIB_C))
-SRC_USERMOD_PATHFIX_LIB_CXX += $(patsubst $(USER_C_MODULES)/%.cpp,%.cpp,$(SRC_USERMOD_LIB_CXX))
+# Strip each USERMOD_DIR's leading path from source files, keeping the module
+# basename as the leading directory so build outputs land at
+# BUILD/<module>/<file>.o. Uses per-directory patsubst on the paths as-is
+# rather than $(abspath) so a parent directory containing whitespace doesn't
+# break word-based patsubst.
+SRC_USERMOD_PATHFIX_C := $(SRC_USERMOD_C)
+SRC_USERMOD_PATHFIX_CXX := $(SRC_USERMOD_CXX)
+SRC_USERMOD_PATHFIX_LIB_C := $(SRC_USERMOD_LIB_C)
+SRC_USERMOD_PATHFIX_LIB_CXX := $(SRC_USERMOD_LIB_CXX)
+SRC_USERMOD_PATHFIX_LIB_ASM := $(SRC_USERMOD_LIB_ASM)
+USERMOD_DIRS := $(sort $(USERMOD_DIRS))
+$(foreach _MDIR, $(USERMOD_DIRS), \
+    $(eval _MBASE := $(notdir $(_MDIR))) \
+    $(eval SRC_USERMOD_PATHFIX_C := $$(patsubst $(_MDIR)/%,$(_MBASE)/%,$$(SRC_USERMOD_PATHFIX_C))) \
+    $(eval SRC_USERMOD_PATHFIX_CXX := $$(patsubst $(_MDIR)/%,$(_MBASE)/%,$$(SRC_USERMOD_PATHFIX_CXX))) \
+    $(eval SRC_USERMOD_PATHFIX_LIB_C := $$(patsubst $(_MDIR)/%,$(_MBASE)/%,$$(SRC_USERMOD_PATHFIX_LIB_C))) \
+    $(eval SRC_USERMOD_PATHFIX_LIB_CXX := $$(patsubst $(_MDIR)/%,$(_MBASE)/%,$$(SRC_USERMOD_PATHFIX_LIB_CXX))) \
+    $(eval SRC_USERMOD_PATHFIX_LIB_ASM := $$(patsubst $(_MDIR)/%,$(_MBASE)/%,$$(SRC_USERMOD_PATHFIX_LIB_ASM))) \
+)
+
+# Parent directories of each USERMOD_DIR, added to vpath below so paths like
+# cexample/foo.c (produced by the patsubst above) resolve to source files.
+USERMOD_DIR_PARENTS := $(sort $(foreach _MDIR, $(USERMOD_DIRS), $(patsubst %/,%,$(dir $(_MDIR)))))
 
 CFLAGS += $(CFLAGS_USERMOD)
 CXXFLAGS += $(CXXFLAGS_USERMOD)
 LDFLAGS += $(LDFLAGS_USERMOD)
+LIBS += $(LIBS_USERMOD)
 
 SRC_QSTR += $(SRC_USERMOD_PATHFIX_C) $(SRC_USERMOD_PATHFIX_CXX)
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_CXX:.cpp=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_CXX:.cpp=.o))
+PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_ASM:.S=.o))
 endif
 
 # py object files
@@ -83,6 +113,9 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	nlrmips.o \
 	nlrpowerpc.o \
 	nlrxtensa.o \
+	nlrrv32.o \
+	nlrrv64.o \
+	nlrloong64.o \
 	nlrsetjmp.o \
 	malloc.o \
 	gc.o \
@@ -113,6 +146,10 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	emitnxtensa.o \
 	emitinlinextensa.o \
 	emitnxtensawin.o \
+	asmrv32.o \
+	emitnrv32.o \
+	emitinlinerv32.o \
+	emitndebug.o \
 	formatfloat.o \
 	parsenumbase.o \
 	parsenum.o \
@@ -124,6 +161,7 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	nativeglue.o \
 	pairheap.o \
 	ringbuf.o \
+	cstack.o \
 	stackctrl.o \
 	argcheck.o \
 	warning.o \
@@ -136,6 +174,7 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	objboundmeth.o \
 	objcell.o \
 	objclosure.o \
+	objcode.o \
 	objcomplex.o \
 	objdeque.o \
 	objdict.o \
@@ -159,12 +198,14 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	objnamedtuple.o \
 	objrange.o \
 	objreversed.o \
+	objringio.o \
 	objset.o \
 	objsingleton.o \
 	objslice.o \
 	objstr.o \
 	objstrunicode.o \
 	objstringio.o \
+	objtemplate.o \
 	objtuple.o \
 	objtype.o \
 	objzip.o \
@@ -183,10 +224,12 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	modmath.o \
 	modcmath.o \
 	modmicropython.o \
+	modstring.o \
 	modstruct.o \
 	modsys.o \
 	moderrno.o \
 	modthread.o \
+	modweakref.o \
 	vm.o \
 	bc.o \
 	showbc.o \
@@ -237,7 +280,7 @@ $(HEADER_BUILD)/compressed.data.h: $(HEADER_BUILD)/compressed.collected
 	$(Q)$(PYTHON) $(PY_SRC)/makecompresseddata.py $< > $@
 
 # build a list of registered modules for py/objmodule.c.
-$(HEADER_BUILD)/moduledefs.h: $(HEADER_BUILD)/moduledefs.collected
+$(HEADER_BUILD)/moduledefs.h: $(HEADER_BUILD)/moduledefs.collected $(PY_SRC)/makemoduledefs.py
 	@$(ECHO) "GEN $@"
 	$(Q)$(PYTHON) $(PY_SRC)/makemoduledefs.py $< > $@
 

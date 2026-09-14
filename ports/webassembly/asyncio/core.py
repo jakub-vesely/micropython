@@ -47,12 +47,9 @@ class SingletonGenerator:
             raise self.exc
 
 
-# Pause task execution for the given time (integer in milliseconds, uPy extension)
+# Pause task execution for the given time (integer in milliseconds, MicroPython extension)
 # Use a SingletonGenerator to do it without allocating on the heap
 def sleep_ms(t, sgen=SingletonGenerator()):
-    if cur_task is None:
-        # Support top-level asyncio.sleep, via a JavaScript Promise.
-        return jsffi.async_timeout_ms(t)
     assert sgen.state is None
     sgen.state = ticks_add(ticks(), max(0, t))
     return sgen
@@ -69,11 +66,21 @@ def sleep(t):
 asyncio_timer = None
 
 
+class TopLevelCoro:
+    @staticmethod
+    def set(resolve, reject):
+        TopLevelCoro.resolve = resolve
+        TopLevelCoro.reject = reject
+
+    @staticmethod
+    def send(value):
+        TopLevelCoro.resolve()
+
+
 class ThenableEvent:
     def __init__(self, thenable):
-        self.result = None  # Result of the thenable
         self.waiting = None  # Task waiting on completion of this thenable
-        thenable.then(self.set)
+        thenable.then(self.set, self.cancel)
 
     def set(self, value=None):
         # Thenable/Promise is fulfilled, set result and schedule any waiting task.
@@ -81,7 +88,15 @@ class ThenableEvent:
         if self.waiting:
             _task_queue.push(self.waiting)
             self.waiting = None
-            _schedule_run_iter(0)
+
+    def cancel(self, value=None):
+        # Thenable/Promise is rejected, set error and schedule any waiting task.
+        self.error = jsffi.JsException(
+            value, getattr(value, "name", None), getattr(value, "message", None)
+        )
+        if self.waiting:
+            _task_queue.push(self.waiting)
+            self.waiting = None
 
     def remove(self, task):
         self.waiting = None
@@ -94,7 +109,9 @@ class ThenableEvent:
         cur_task.data = self
         # Wait for the thenable to fulfill.
         yield
-        # Return the result of the thenable.
+        # Raise the error, or return the result, of the thenable.
+        if hasattr(self, "error"):
+            raise self.error
         return self.result
 
 
@@ -122,12 +139,12 @@ def _run_iter():
             dt = max(0, ticks_diff(t.ph_key, ticks()))
         else:
             # No tasks can be woken so finished running
-            cur_task = None
+            cur_task = _top_level_task
             return
 
         if dt > 0:
             # schedule to call again later
-            cur_task = None
+            cur_task = _top_level_task
             _schedule_run_iter(dt)
             return
 
@@ -194,15 +211,17 @@ def create_task(coro):
         raise TypeError("coroutine expected")
     t = Task(coro, globals())
     _task_queue.push(t)
-    _schedule_run_iter(0)
     return t
 
+
+# Task used to suspend and resume top-level await.
+_top_level_task = Task(TopLevelCoro, globals())
 
 ################################################################################
 # Event loop wrapper
 
 
-cur_task = None
+cur_task = _top_level_task
 
 
 class Loop:
@@ -234,14 +253,13 @@ def get_event_loop():
 
 
 def current_task():
-    if cur_task is None:
-        raise RuntimeError("no running event loop")
+    assert cur_task is not None
     return cur_task
 
 
 def new_event_loop():
     global _task_queue
-    _task_queue = TaskQueue()  # TaskQueue of Task instances.
+    _task_queue = TaskQueue(_schedule_run_iter)  # TaskQueue of Task instances.
     return Loop
 
 

@@ -21,5 +21,9 @@ MICROPY_PY_LWIP = 1
 MICROPY_PY_SSL = 1
 MICROPY_SSL_MBEDTLS = 1
 MICROPY_VFS_LFS2 = 1
+MICROPY_HW_ENABLE_ISR_UART_FLASH_FUNCS_IN_RAM = 1
 
 FROZEN_MANIFEST ?= $(BOARD_DIR)/manifest.py
+
+# Flash tool configuration
+OPENOCD_CONFIG = boards/openocd_stm32h7_dual_bank.cfg

@@ -29,7 +29,7 @@
 
 // Send raise KeyboardInterrupt directly from the signal handler rather than
 // scheduling it into the VM.
-#define MICROPY_ASYNC_KBD_INTR         (1)
+#define MICROPY_ASYNC_KBD_INTR         (!MICROPY_PY_THREAD_GIL)
 
 // Enable helpers for printing debugging information.
 #ifndef MICROPY_DEBUG_PRINTERS
@@ -83,7 +83,9 @@
 #define MICROPY_PY_GC_COLLECT_RETVAL   (1)
 
 // Enable detailed error messages and warnings.
+#ifndef MICROPY_ERROR_REPORTING
 #define MICROPY_ERROR_REPORTING     (MICROPY_ERROR_REPORTING_DETAILED)
+#endif
 #define MICROPY_WARNINGS               (1)
 #define MICROPY_PY_STR_BYTES_CMP_WARN  (1)
 
@@ -95,7 +97,6 @@
 #define MICROPY_PY_OS_INCLUDEFILE      "ports/unix/modos.c"
 #define MICROPY_PY_OS_ERRNO            (1)
 #define MICROPY_PY_OS_GETENV_PUTENV_UNSETENV (1)
-#define MICROPY_PY_OS_SEP              (1)
 #define MICROPY_PY_OS_SYSTEM           (1)
 #define MICROPY_PY_OS_URANDOM          (1)
 
@@ -104,12 +105,6 @@
 #define MICROPY_PY_TIME_TIME_TIME_NS   (1)
 #define MICROPY_PY_TIME_CUSTOM_SLEEP   (1)
 #define MICROPY_PY_TIME_INCLUDEFILE    "ports/unix/modtime.c"
-
-#if MICROPY_PY_SSL
-#define MICROPY_PY_HASHLIB_MD5         (1)
-#define MICROPY_PY_HASHLIB_SHA1        (1)
-#define MICROPY_PY_CRYPTOLIB           (1)
-#endif
 
 // The "select" module is enabled by default, but disable select.select().
 #define MICROPY_PY_SELECT_POSIX_OPTIMISATIONS (1)
@@ -122,3 +117,6 @@
 #define MICROPY_PY_MACHINE             (1)
 #define MICROPY_PY_MACHINE_PULSE       (1)
 #define MICROPY_PY_MACHINE_PIN_BASE    (1)
+
+#define MICROPY_VFS_ROM                (1)
+#define MICROPY_VFS_ROM_IOCTL          (0)

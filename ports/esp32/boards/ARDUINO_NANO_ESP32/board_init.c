@@ -26,6 +26,8 @@
 
 #include <string.h>
 #include "py/mphal.h"
+#include "shared/tinyusb/mp_usbd_cdc.h"
+#include "modmachine.h"
 
 #include <esp_system.h>
 #include <esp_ota_ops.h>
@@ -33,9 +35,6 @@
 
 #include "double_tap.h"
 #include "usb.h"
-
-#include "tinyusb.h"
-#include "tusb_cdc_acm.h"
 
 #define LED_RED     GPIO_NUM_46
 #define LED_GREEN   GPIO_NUM_0
@@ -68,7 +67,13 @@ static void rgb_pulse_delay() {
     mp_hal_pin_write(LED_BLUE, 1);
 }
 
-void NANO_ESP32_enter_bootloader(void) {
+NORETURN void NANO_ESP32_enter_bootloader(size_t n_args, const void *args) {
+    mp_int_t mode;
+    if (n_args == 1 && mp_obj_get_int_maybe(*(const mp_obj_t *)args, &mode) && mode == 1) {
+        // jump to hardware bootloader (does not return)
+        machine_bootloader_rtc();
+    }
+
     if (!_recovery_active) {
         // check for valid partition scheme
         const esp_partition_t *ota_part = esp_ota_get_next_update_partition(NULL);
@@ -84,12 +89,6 @@ void NANO_ESP32_enter_bootloader(void) {
     }
 
     esp_restart();
-}
-
-void NANO_ESP32_usb_callback_line_state_changed(int itf, void *event_in) {
-    extern void mp_usbd_line_state_cb(uint8_t itf, bool dtr, bool rts);
-    cdcacm_event_t *event = event_in;
-    mp_usbd_line_state_cb(itf, event->line_state_changed_data.dtr, event->line_state_changed_data.rts);
 }
 
 void NANO_ESP32_board_startup(void) {
@@ -112,7 +111,7 @@ void NANO_ESP32_board_startup(void) {
     _recovery_marker_found = double_tap_check_match();
     if (_recovery_marker_found && !_recovery_active) {
         // double tap detected in user application, reboot to factory
-        NANO_ESP32_enter_bootloader();
+        NANO_ESP32_enter_bootloader(0, NULL);
     }
 
     // delay with mark set then proceed

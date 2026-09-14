@@ -174,7 +174,7 @@ static mp_obj_t return_ffi_value(ffi_union_t *val, char type) {
             if (!s) {
                 return mp_const_none;
             }
-            return mp_obj_new_str(s, strlen(s));
+            return mp_obj_new_str_from_cstr(s);
         }
         case 'v':
             return mp_const_none;
@@ -190,10 +190,13 @@ static mp_obj_t return_ffi_value(ffi_union_t *val, char type) {
         case 'h':
         case 'i':
         case 'l':
-            return mp_obj_new_int((signed)val->ffi);
+            return mp_obj_new_int((ffi_sarg)val->ffi);
+        case 'I':
+            // On RV64, 32-bit values are stored as signed integers inside the
+            // holding register.
+            return mp_obj_new_int_from_uint(val->ffi & 0xFFFFFFFF);
         case 'B':
         case 'H':
-        case 'I':
         case 'L':
             return mp_obj_new_int_from_uint(val->ffi);
         case 'q':
@@ -334,7 +337,8 @@ static mp_obj_t mod_ffi_callback(size_t n_args, const mp_obj_t *pos_args, mp_map
     const char *rettype = mp_obj_str_get_str(rettype_in);
 
     mp_int_t nparams = MP_OBJ_SMALL_INT_VALUE(mp_obj_len_maybe(paramtypes_in));
-    mp_obj_fficallback_t *o = mp_obj_malloc_var(mp_obj_fficallback_t, params, ffi_type *, nparams, &fficallback_type);
+    mp_obj_fficallback_t *o = (mp_obj_fficallback_t *)m_tracked_calloc(offsetof(mp_obj_fficallback_t, params) + sizeof(ffi_type *) * nparams, sizeof(uint8_t));
+    o->base.type = &fficallback_type;
 
     o->clo = ffi_closure_alloc(sizeof(ffi_closure), &o->func);
 
@@ -442,7 +446,7 @@ static unsigned long long ffi_get_int_value(mp_obj_t o) {
         return MP_OBJ_SMALL_INT_VALUE(o);
     } else {
         unsigned long long res;
-        mp_obj_int_to_bytes_impl(o, MP_ENDIANNESS_BIG, sizeof(res), (byte *)&res);
+        mp_obj_int_to_bytes(o, sizeof(res), (byte *)&res, MP_ENDIANNESS_BIG, false, false);
         return res;
     }
 }

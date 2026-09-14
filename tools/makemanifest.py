@@ -24,7 +24,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-from __future__ import print_function
 import sys
 import os
 import subprocess
@@ -137,6 +136,9 @@ def main():
     )
     cmd_parser.add_argument("-v", "--var", action="append", help="variables to substitute")
     cmd_parser.add_argument("--mpy-tool-flags", default="", help="flags to pass to mpy-tool")
+    cmd_parser.add_argument(
+        "--list-c-modules", action="store_true", help="list C module paths from manifest and exit"
+    )
     cmd_parser.add_argument("files", nargs="+", help="input manifest list")
     args = cmd_parser.parse_args()
 
@@ -151,6 +153,32 @@ def main():
         print("MPY_DIR and PORT_DIR variables must be specified")
         sys.exit(1)
 
+    # Use a lighter mode when only listing C modules: freeze/package/module
+    # become no-ops so the listing doesn't fail on freeze targets that may not
+    # exist for every variant of the board (e.g. alif's modules/$(MCU_CORE)).
+    mode = manifestfile.MODE_LIST_C_MODULES if args.list_c_modules else manifestfile.MODE_FREEZE
+    manifest = manifestfile.ManifestFile(mode, VARS)
+
+    # Include top-level inputs, to generate the manifest
+    for input_manifest in args.files:
+        try:
+            manifest.execute(input_manifest)
+        except manifestfile.ManifestFileError as er:
+            print(
+                'manifest error executing "{}": {}'.format(input_manifest, er.args[0]),
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # If we're just listing C modules, output them and exit
+    if args.list_c_modules:
+        c_modules = manifest.c_modules()
+        if c_modules:
+            # Output one path per line to handle paths with spaces
+            for module in c_modules:
+                print(module)
+        sys.exit(0)
+
     # Get paths to tools
     MPY_CROSS = VARS["MPY_DIR"] + "/mpy-cross/build/mpy-cross"
     if sys.platform == "win32":
@@ -162,16 +190,6 @@ def main():
     if not os.path.exists(MPY_CROSS):
         print("mpy-cross not found at {}, please build it first".format(MPY_CROSS))
         sys.exit(1)
-
-    manifest = manifestfile.ManifestFile(manifestfile.MODE_FREEZE, VARS)
-
-    # Include top-level inputs, to generate the manifest
-    for input_manifest in args.files:
-        try:
-            manifest.execute(input_manifest)
-        except manifestfile.ManifestFileError as er:
-            print('freeze error executing "{}": {}'.format(input_manifest, er.args[0]))
-            sys.exit(1)
 
     # Process the manifest
     str_paths = []
@@ -245,7 +263,11 @@ def main():
             b'#include "py/emitglue.h"\n'
             b"extern const qstr_pool_t mp_qstr_const_pool;\n"
             b"const qstr_pool_t mp_qstr_frozen_const_pool = {\n"
-            b"    (qstr_pool_t*)&mp_qstr_const_pool, MP_QSTRnumber_of, 0, 0\n"
+            b"    #if MICROPY_QSTR_BYTES_IN_HASH\n"
+            b"    (qstr_pool_t*)&mp_qstr_const_pool, MP_QSTRnumber_of, 0, 0, 0, NULL, NULL, {},\n"
+            b"    #else\n"
+            b"    (qstr_pool_t*)&mp_qstr_const_pool, MP_QSTRnumber_of, 0, 0, 0, NULL, {},\n"
+            b"    #endif\n"
             b"};\n"
             b'const char mp_frozen_names[] = { MP_FROZEN_STR_NAMES "\\0"};\n'
             b"const mp_raw_code_t *const mp_frozen_mpy_content[] = {NULL};\n"

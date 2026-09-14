@@ -24,29 +24,21 @@
  * THE SOFTWARE.
  */
 #include <py/mpconfig.h>
+#include <py/misc.h>
+#include <string.h>
 
 #ifdef MICROPY_SSL_MBEDTLS
 
 #include "mbedtls_config_port.h"
 
-#include "hardware/rtc.h"
 #include "shared/timeutils/timeutils.h"
 #include "mbedtls/platform_time.h"
-
-extern uint8_t rosc_random_u8(size_t cycles);
-
-int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen) {
-    *olen = len;
-    for (size_t i = 0; i < len; i++) {
-        output[i] = rosc_random_u8(8);
-    }
-    return 0;
-}
+#include "pico/aon_timer.h"
 
 time_t rp2_rtctime_seconds(time_t *timer) {
-    datetime_t t;
-    rtc_get_datetime(&t);
-    return timeutils_seconds_since_epoch(t.year, t.month, t.day, t.hour, t.min, t.sec);
+    struct timespec ts;
+    aon_timer_get_time(&ts);
+    return ts.tv_sec;
 }
 
 mbedtls_ms_time_t mbedtls_ms_time(void) {

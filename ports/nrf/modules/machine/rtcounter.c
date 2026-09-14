@@ -25,9 +25,8 @@
  * THE SOFTWARE.
  */
 
-#include "py/nlr.h"
+#include "py/mphal.h"
 #include "py/runtime.h"
-#include "mphalport.h"
 #include "rtcounter.h"
 #include "nrfx_rtc.h"
 #include "nrf_clock.h"
@@ -129,7 +128,7 @@ static void rtc_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t
 /* MicroPython bindings for machine API                                       */
 
 const nrfx_rtc_config_t machine_rtc_config = {
-    .prescaler = RTC_FREQ_TO_PRESCALER(RTC_FREQUENCY),
+    .prescaler = NRF_RTC_FREQ_TO_PRESCALER(RTC_FREQUENCY),
     .reliable = 0,
     .tick_latency = 0, // ignored when reliable == 0
     #ifdef NRF51

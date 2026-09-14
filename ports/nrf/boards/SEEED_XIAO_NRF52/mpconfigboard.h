@@ -26,12 +26,12 @@
 
 #define MICROPY_HW_BOARD_NAME       "XIAO nRF52840 Sense"
 #define MICROPY_HW_MCU_NAME         "NRF52840"
-#define MICROPY_PY_SYS_PLATFORM     "nrf52"
 
 #define MICROPY_BOARD_EARLY_INIT        XIAO_board_early_init
 #define MICROPY_BOARD_DEINIT            XIAO_board_deinit
 #define MICROPY_BOARD_ENTER_BOOTLOADER(nargs, args) XIAO_board_enter_bootloader()
 
+#define MICROPY_HW_ENABLE_USBDEV    (1)
 #define MICROPY_HW_USB_CDC          (1)
 #define MICROPY_PY_MACHINE_UART     (1)
 #define MICROPY_PY_MACHINE_HW_PWM   (1)
