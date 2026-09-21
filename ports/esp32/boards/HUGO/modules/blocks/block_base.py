@@ -1,6 +1,6 @@
 #  Copyright (c) 2022 Jakub Vesely
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
-
+import os
 import machine   # type: ignore
 import time
 from micropython import const   # type: ignore
@@ -20,7 +20,11 @@ class PowerSaveLevel:
   DeepPowerSave = 2  # all subsystems are turned off
 
 class BlockBase:
-  i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
+  chip = os.uname().machine.rsplit(" with ", 1)[-1]
+  if chip == "ESP32-H2":
+    i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(12), freq=100000) #pin 21 is not available for ESP32-H2
+  else:
+    i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21), freq=100000)
 
   def __init__(self, block_type: BlockType, address: int):
     self.type_id = block_type.id
