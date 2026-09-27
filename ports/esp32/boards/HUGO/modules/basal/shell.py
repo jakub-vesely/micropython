@@ -68,7 +68,6 @@ class Shell():
       cls.events_imported = True
       return True
     except Exception as error:
-      cls.logging.info("bla")
       cls.logging.exception(error, extra_message="events.py was not imported properly")
       import sys
       sys.print_exception(error, sys.stdout)
