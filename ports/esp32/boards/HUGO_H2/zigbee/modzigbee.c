@@ -11,6 +11,7 @@
 #include "esp_zigbee.h"
 #include "ezbee/zha.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "py/mperrno.h"
 #include "py/obj.h"
@@ -20,6 +21,7 @@
 #define ZIGBEE_MAX_CLUSTERS 24
 #define ZIGBEE_MAX_ATTRIBUTES 48
 #define ZIGBEE_NAME_MAX 31
+#define ZIGBEE_REPORT_CONFIRM_TIMEOUT_MS 3000
 
 typedef union {
     uint8_t u8;
@@ -55,6 +57,12 @@ typedef struct {
 
 typedef struct { mp_obj_base_t base; uint8_t index; } zigbee_config_obj_t;
 
+typedef struct {
+    SemaphoreHandle_t done;
+    volatile uint8_t status;
+    volatile uint8_t references;
+} zigbee_report_confirmation_t;
+
 static const char *TAG = "hugo_zigbee";
 static uint8_t zigbee_manufacturer[ZIGBEE_NAME_MAX + 2] = "\x04" "HuGo";
 static uint8_t zigbee_model[ZIGBEE_NAME_MAX + 2] = "\x07" CONFIG_IDF_TARGET;
@@ -73,6 +81,7 @@ static volatile int zigbee_factory_new = -1;
 static volatile int zigbee_last_steering_status = -1;
 static volatile ezb_err_t zigbee_last_error = EZB_ERR_NONE;
 static volatile ezb_err_t zigbee_last_report_error = EZB_ERR_NONE;
+static SemaphoreHandle_t zigbee_report_mutex;
 static esp_timer_handle_t zigbee_init_retry_timer;
 static zigbee_endpoint_config_t zigbee_endpoints[ZIGBEE_MAX_ENDPOINTS];
 static zigbee_cluster_config_t zigbee_clusters[ZIGBEE_MAX_CLUSTERS];
@@ -84,6 +93,29 @@ static size_t zigbee_attribute_count;
 extern const mp_obj_type_t zigbee_endpoint_type;
 extern const mp_obj_type_t zigbee_cluster_type;
 extern const mp_obj_type_t zigbee_attribute_type;
+
+static void zigbee_report_confirmation_release(zigbee_report_confirmation_t *confirmation) {
+    if (__atomic_sub_fetch(&confirmation->references, 1, __ATOMIC_ACQ_REL) == 0) {
+        vSemaphoreDelete(confirmation->done);
+        vPortFree(confirmation);
+    }
+}
+
+static void zigbee_report_confirmed(ezb_zcl_cmd_cnf_t *confirmation, void *user_ctx) {
+    zigbee_report_confirmation_t *pending = user_ctx;
+    __atomic_store_n(&pending->status, confirmation->status, __ATOMIC_RELEASE);
+    zigbee_last_report_error = confirmation->status;
+    xSemaphoreGive(pending->done);
+    zigbee_report_confirmation_release(pending);
+}
+
+static bool zigbee_report_sync_init(void) {
+    if (zigbee_report_mutex != NULL) {
+        return true;
+    }
+    zigbee_report_mutex = xSemaphoreCreateMutex();
+    return zigbee_report_mutex != NULL;
+}
 
 static void zigbee_schedule_initialization_retry(void) {
     if (zigbee_init_retry_timer != NULL) {
@@ -349,6 +381,9 @@ static mp_obj_t zigbee_start(void) {
         mp_raise_ValueError(MP_ERROR_TEXT("call add_endpoint before start"));
     }
     if (!zigbee_started) {
+        if (!zigbee_report_sync_init()) {
+            mp_raise_OSError(MP_ENOMEM);
+        }
         zigbee_startup_signal_seen = false;
         zigbee_initialization_status = -1;
         zigbee_factory_new = -1;
@@ -597,18 +632,44 @@ static mp_obj_t zigbee_attribute_send(mp_obj_t self_in, mp_obj_t value_in) {
     zigbee_endpoint_config_t *endpoint = &zigbee_endpoints[cluster->endpoint_index];
     zigbee_store_value(attribute, value_in);
     if (!zigbee_ready || !zigbee_joined) mp_raise_OSError(MP_ENOTCONN);
+    if (zigbee_report_mutex == NULL) mp_raise_OSError(MP_ENODEV);
+
+    zigbee_report_confirmation_t *confirmation = pvPortMalloc(sizeof(*confirmation));
+    if (confirmation == NULL) mp_raise_OSError(MP_ENOMEM);
+    confirmation->done = xSemaphoreCreateBinary();
+    if (confirmation->done == NULL) {
+        vPortFree(confirmation);
+        mp_raise_OSError(MP_ENOMEM);
+    }
+    confirmation->status = UINT8_MAX;
+    confirmation->references = 2;
+
+    if (xSemaphoreTake(zigbee_report_mutex, pdMS_TO_TICKS(ZIGBEE_REPORT_CONFIRM_TIMEOUT_MS)) != pdTRUE) {
+        confirmation->references = 1;
+        zigbee_report_confirmation_release(confirmation);
+        zigbee_last_report_error = EZB_ERR_TIMEOUT;
+        return mp_const_false;
+    }
+
     ezb_zcl_report_attr_cmd_t report = {
         .cmd_ctrl = {
             .fc.direction = EZB_ZCL_CMD_DIRECTION_TO_CLI,
             .dst_addr.addr_mode = EZB_ADDR_MODE_NONE,
             .src_ep = endpoint->endpoint_id,
             .cluster_id = cluster->cluster_id,
+            .cnf_ctx = {
+                .cb = zigbee_report_confirmed,
+                .user_ctx = confirmation,
+            },
         },
         .payload = {
             .attr_id = attribute->attribute_id,
         },
     };
     if (!esp_zigbee_lock_acquire(pdMS_TO_TICKS(1000))) {
+        confirmation->references = 1;
+        zigbee_report_confirmation_release(confirmation);
+        xSemaphoreGive(zigbee_report_mutex);
         mp_raise_OSError(MP_ETIMEDOUT);
     }
     ezb_zcl_status_t update = ezb_zcl_set_attr_value(
@@ -616,25 +677,46 @@ static mp_obj_t zigbee_attribute_send(mp_obj_t self_in, mp_obj_t value_in) {
         attribute->attribute_id, attribute->manufacturer_code, &attribute->value, false);
     ezb_err_t send = EZB_ERR_NONE;
     if (update == EZB_ZCL_STATUS_SUCCESS) {
+        zigbee_last_report_error = EZB_ERR_NONE;
         send = ezb_zcl_report_attr_cmd_req(&report);
     }
     esp_zigbee_lock_release();
     if (update != EZB_ZCL_STATUS_SUCCESS) {
+        confirmation->references = 1;
+        zigbee_report_confirmation_release(confirmation);
+        xSemaphoreGive(zigbee_report_mutex);
         ESP_LOGE(TAG, "Unable to update endpoint %u cluster 0x%04x attribute 0x%04x: 0x%02x",
             endpoint->endpoint_id, cluster->cluster_id, attribute->attribute_id, update);
         mp_raise_OSError(MP_EIO);
     }
-    if (send != zigbee_last_report_error) {
-        if (send == EZB_ERR_NONE) {
-            ESP_LOGI(TAG, "Attribute reporting destination is ready");
-        } else {
-            ESP_LOGW(TAG,
-                "Attribute updated, but report is not routable yet: 0x%x (coordinator may still be binding the endpoint)",
-                send);
-        }
+    if (send != EZB_ERR_NONE) {
+        zigbee_last_report_error = send;
+        confirmation->references = 1;
+        zigbee_report_confirmation_release(confirmation);
+        xSemaphoreGive(zigbee_report_mutex);
+        ESP_LOGW(TAG,
+            "Attribute updated, but report request failed: 0x%x",
+            send);
+        return mp_const_false;
     }
-    zigbee_last_report_error = send;
-    return mp_const_none;
+
+    bool completed = xSemaphoreTake(
+        confirmation->done, pdMS_TO_TICKS(ZIGBEE_REPORT_CONFIRM_TIMEOUT_MS)) == pdTRUE;
+    uint8_t status = completed
+        ? __atomic_load_n(&confirmation->status, __ATOMIC_ACQUIRE)
+        : UINT8_MAX;
+    if (!completed) {
+        zigbee_last_report_error = EZB_ERR_TIMEOUT;
+        ESP_LOGW(TAG, "Attribute report confirmation timed out");
+    } else if (status != EZB_ZCL_STATUS_SUCCESS) {
+        zigbee_last_report_error = status;
+        ESP_LOGW(TAG, "Attribute report delivery failed: 0x%02x", status);
+    } else {
+        zigbee_last_report_error = EZB_ERR_NONE;
+    }
+    zigbee_report_confirmation_release(confirmation);
+    xSemaphoreGive(zigbee_report_mutex);
+    return mp_obj_new_bool(completed && status == EZB_ZCL_STATUS_SUCCESS);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(zigbee_attribute_send_obj, zigbee_attribute_send);
 

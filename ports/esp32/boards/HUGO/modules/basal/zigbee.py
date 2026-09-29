@@ -48,7 +48,7 @@ class Sensor:
         if not self._minimum <= value <= self._maximum:
             raise ValueError("value outside sensor range")
         encoded = value * self._scale
-        self._attribute.send(encoded if self._floating else round(encoded))
+        return self._attribute.send(encoded if self._floating else round(encoded))
 
 
 def _endpoint(endpoint_id):
