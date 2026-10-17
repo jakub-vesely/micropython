@@ -140,7 +140,8 @@ def add_sensor(cluster_id, attribute_id=MEASURED_VALUE, *, endpoint_id=None):
     raise ValueError("unsupported cluster or attribute")
 
 
-start = zigbee.start
+start_end_device = zigbee.start_end_device
+start_router = zigbee.start_router
 joined = zigbee.joined
 status = zigbee.status
 join = zigbee.join

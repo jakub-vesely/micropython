@@ -69,6 +69,8 @@ static uint8_t zigbee_model[ZIGBEE_NAME_MAX + 2] = "\x07" CONFIG_IDF_TARGET;
 static uint32_t zigbee_primary_channels = (1U << 13);
 static uint32_t zigbee_secondary_channels = 0x07fff800U;
 static uint8_t zigbee_min_join_lqi;
+static ezb_nwk_device_type_t zigbee_device_type = EZB_NWK_DEVICE_TYPE_END_DEVICE;
+static uint8_t zigbee_max_children;
 
 static volatile bool zigbee_started;
 static volatile bool zigbee_ready;
@@ -299,7 +301,7 @@ static esp_err_t zigbee_register_endpoint(ezb_af_device_desc_t device, size_t en
 
 static esp_err_t zigbee_register_device(void) {
     if (zigbee_endpoint_count == 0) {
-        ESP_LOGE(TAG, "No endpoints configured; call zigbee.add_endpoint() before zigbee.start()");
+        ESP_LOGE(TAG, "No endpoints configured; call zigbee.add_endpoint() before starting Zigbee");
         return ESP_FAIL;
     }
     ezb_af_device_desc_t device = ezb_af_create_device_desc();
@@ -319,12 +321,8 @@ static void zigbee_task(void *arg) {
     esp_log_level_set(TAG, ESP_LOG_INFO);
     esp_zigbee_config_t config = {
         .device_config = {
-            .device_type = EZB_NWK_DEVICE_TYPE_END_DEVICE,
+            .device_type = zigbee_device_type,
             .install_code_policy = false,
-            .zed_config = {
-                .ed_timeout = EZB_NWK_ED_TIMEOUT_64MIN,
-                .keep_alive = 4000,
-            },
         },
         .platform_config = {
             .storage_partition_name = "nvs",
@@ -333,6 +331,12 @@ static void zigbee_task(void *arg) {
             },
         },
     };
+    if (zigbee_device_type == EZB_NWK_DEVICE_TYPE_ROUTER) {
+        config.device_config.zczr_config.max_children = zigbee_max_children;
+    } else {
+        config.device_config.zed_config.ed_timeout = EZB_NWK_ED_TIMEOUT_64MIN;
+        config.device_config.zed_config.keep_alive = 4000;
+    }
 
     if (esp_zigbee_init(&config) != ESP_OK) {
         ESP_LOGE(TAG, "esp_zigbee_init failed");
@@ -360,7 +364,9 @@ static void zigbee_task(void *arg) {
     }
 
     zigbee_ready = true;
-    ESP_LOGI(TAG, "Zigbee device started with %u endpoint(s)", (unsigned)zigbee_endpoint_count);
+    ESP_LOGI(TAG, "Zigbee %s started with %u endpoint(s)",
+        zigbee_device_type == EZB_NWK_DEVICE_TYPE_ROUTER ? "router" : "end device",
+        (unsigned)zigbee_endpoint_count);
     esp_zigbee_launch_mainloop();
     zigbee_ready = false;
     zigbee_joined = false;
@@ -376,31 +382,47 @@ done:
     vTaskDelete(NULL);
 }
 
-static mp_obj_t zigbee_start(void) {
+static mp_obj_t zigbee_start_device(ezb_nwk_device_type_t device_type, uint8_t max_children) {
     if (zigbee_endpoint_count == 0) {
-        mp_raise_ValueError(MP_ERROR_TEXT("call add_endpoint before start"));
+        mp_raise_ValueError(MP_ERROR_TEXT("call add_endpoint before starting Zigbee"));
     }
-    if (!zigbee_started) {
-        if (!zigbee_report_sync_init()) {
-            mp_raise_OSError(MP_ENOMEM);
-        }
-        zigbee_startup_signal_seen = false;
-        zigbee_initialization_status = -1;
-        zigbee_factory_new = -1;
-        zigbee_last_steering_status = -1;
-        zigbee_steering_in_progress = false;
-        zigbee_rejoining = false;
-        zigbee_last_error = EZB_ERR_NONE;
-        zigbee_last_report_error = EZB_ERR_NONE;
-        zigbee_started = true;
-        if (xTaskCreate(zigbee_task, "hugo_zigbee", 6144, NULL, 5, NULL) != pdPASS) {
-            zigbee_started = false;
-            mp_raise_OSError(MP_ENOMEM);
-        }
+    if (zigbee_started) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Zigbee already started"));
+    }
+    if (!zigbee_report_sync_init()) {
+        mp_raise_OSError(MP_ENOMEM);
+    }
+    zigbee_device_type = device_type;
+    zigbee_max_children = max_children;
+    zigbee_startup_signal_seen = false;
+    zigbee_initialization_status = -1;
+    zigbee_factory_new = -1;
+    zigbee_last_steering_status = -1;
+    zigbee_steering_in_progress = false;
+    zigbee_rejoining = false;
+    zigbee_last_error = EZB_ERR_NONE;
+    zigbee_last_report_error = EZB_ERR_NONE;
+    zigbee_started = true;
+    if (xTaskCreate(zigbee_task, "hugo_zigbee", 6144, NULL, 5, NULL) != pdPASS) {
+        zigbee_started = false;
+        mp_raise_OSError(MP_ENOMEM);
     }
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(zigbee_start_obj, zigbee_start);
+
+static mp_obj_t zigbee_start_end_device(void) {
+    return zigbee_start_device(EZB_NWK_DEVICE_TYPE_END_DEVICE, 0);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(zigbee_start_end_device_obj, zigbee_start_end_device);
+
+static mp_obj_t zigbee_start_router(mp_obj_t max_children_in) {
+    mp_int_t max_children = mp_obj_get_int(max_children_in);
+    if (max_children < 0 || max_children > UINT8_MAX) {
+        mp_raise_ValueError(MP_ERROR_TEXT("max_children must be 0..255"));
+    }
+    return zigbee_start_device(EZB_NWK_DEVICE_TYPE_ROUTER, max_children);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(zigbee_start_router_obj, zigbee_start_router);
 
 static mp_obj_t zigbee_is_joined(void) {
     return mp_obj_new_bool(zigbee_joined);
@@ -748,7 +770,8 @@ static const mp_rom_map_elem_t zigbee_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_Attribute), MP_ROM_PTR(&zigbee_attribute_type) },
     { MP_ROM_QSTR(MP_QSTR_configure), MP_ROM_PTR(&zigbee_configure_obj) },
     { MP_ROM_QSTR(MP_QSTR_add_endpoint), MP_ROM_PTR(&zigbee_add_endpoint_obj) },
-    { MP_ROM_QSTR(MP_QSTR_start), MP_ROM_PTR(&zigbee_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_start_end_device), MP_ROM_PTR(&zigbee_start_end_device_obj) },
+    { MP_ROM_QSTR(MP_QSTR_start_router), MP_ROM_PTR(&zigbee_start_router_obj) },
     { MP_ROM_QSTR(MP_QSTR_joined), MP_ROM_PTR(&zigbee_is_joined_obj) },
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&zigbee_status_obj) },
     { MP_ROM_QSTR(MP_QSTR_join), MP_ROM_PTR(&zigbee_join_obj) },
