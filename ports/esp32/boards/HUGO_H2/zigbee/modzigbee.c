@@ -210,6 +210,10 @@ static bool zigbee_signal_handler(const ezb_app_signal_t *signal) {
 
 static ezb_zcl_cluster_desc_t zigbee_create_cluster(const zigbee_cluster_config_t *config) {
     switch (config->cluster_id) {
+        case EZB_ZCL_CLUSTER_ID_ON_OFF:
+            return ezb_zcl_on_off_create_cluster_desc(NULL, config->role);
+        case EZB_ZCL_CLUSTER_ID_BINARY_INPUT:
+            return ezb_zcl_binary_input_create_cluster_desc(NULL, config->role);
         case EZB_ZCL_CLUSTER_ID_ELECTRICAL_MEASUREMENT:
             return ezb_zcl_electrical_measurement_create_cluster_desc(NULL, config->role);
         case EZB_ZCL_CLUSTER_ID_TEMPERATURE_MEASUREMENT:
@@ -647,12 +651,68 @@ static mp_obj_t zigbee_cluster_add_attribute(size_t n_args, const mp_obj_t *pos_
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(zigbee_cluster_add_attribute_obj, 4, zigbee_cluster_add_attribute);
 
+// Access the live ZCL data model under the stack lock. Python polls this from
+// Planner; no Zigbee callback enters the MicroPython VM or performs I2C IO.
+static mp_obj_t zigbee_attribute_get(mp_obj_t self_in) {
+    zigbee_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    zigbee_attribute_config_t *attribute = &zigbee_attributes[self->index];
+    zigbee_value_t value = attribute->value;
+    if (zigbee_started && !zigbee_ready) mp_raise_OSError(MP_EAGAIN);
+    if (zigbee_ready) {
+        zigbee_cluster_config_t *cluster = &zigbee_clusters[attribute->cluster_index];
+        zigbee_endpoint_config_t *endpoint = &zigbee_endpoints[cluster->endpoint_index];
+        if (!esp_zigbee_lock_acquire(pdMS_TO_TICKS(1000))) mp_raise_OSError(MP_ETIMEDOUT);
+        ezb_zcl_attr_desc_t desc = ezb_zcl_get_attr_desc(endpoint->endpoint_id,
+            cluster->cluster_id, cluster->role, attribute->attribute_id, attribute->manufacturer_code);
+        bool valid = desc != EZB_INVALID_ZCL_ATTR_DESC &&
+            ezb_zcl_attr_desc_get_type(desc) == attribute->data_type &&
+            ezb_zcl_attr_desc_get_value_size(desc) <= sizeof(value) &&
+            ezb_zcl_attr_desc_get_value(desc, &value) == EZB_ERR_NONE;
+        esp_zigbee_lock_release();
+        if (!valid) mp_raise_OSError(MP_EIO);
+    }
+    switch (attribute->data_type) {
+        case EZB_ZCL_ATTR_TYPE_BOOL: return mp_obj_new_bool(value.u8);
+        case EZB_ZCL_ATTR_TYPE_UINT8: return mp_obj_new_int(value.u8);
+        case EZB_ZCL_ATTR_TYPE_UINT16: return mp_obj_new_int(value.u16);
+        case EZB_ZCL_ATTR_TYPE_UINT32:
+        case EZB_ZCL_ATTR_TYPE_MAP32: return mp_obj_new_int_from_uint(value.u32);
+        case EZB_ZCL_ATTR_TYPE_INT8: return mp_obj_new_int(value.i8);
+        case EZB_ZCL_ATTR_TYPE_INT16: return mp_obj_new_int(value.i16);
+        case EZB_ZCL_ATTR_TYPE_INT32: return mp_obj_new_int(value.i32);
+        case EZB_ZCL_ATTR_TYPE_SINGLE: return mp_obj_new_float(value.f32);
+        default: mp_raise_ValueError(MP_ERROR_TEXT("unsupported ZCL data type"));
+    }
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(zigbee_attribute_get_obj, zigbee_attribute_get);
+
+static mp_obj_t zigbee_attribute_set(mp_obj_t self_in, mp_obj_t value_in) {
+    zigbee_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    zigbee_attribute_config_t *attribute = &zigbee_attributes[self->index];
+    zigbee_attribute_config_t updated = *attribute;
+    zigbee_store_value(&updated, value_in);
+    if (zigbee_started && !zigbee_ready) mp_raise_OSError(MP_EAGAIN);
+    if (zigbee_ready) {
+        zigbee_cluster_config_t *cluster = &zigbee_clusters[attribute->cluster_index];
+        zigbee_endpoint_config_t *endpoint = &zigbee_endpoints[cluster->endpoint_index];
+        if (!esp_zigbee_lock_acquire(pdMS_TO_TICKS(1000))) mp_raise_OSError(MP_ETIMEDOUT);
+        ezb_zcl_status_t result = ezb_zcl_set_attr_value(endpoint->endpoint_id,
+            cluster->cluster_id, cluster->role, attribute->attribute_id,
+            attribute->manufacturer_code, &updated.value, false);
+        esp_zigbee_lock_release();
+        if (result != EZB_ZCL_STATUS_SUCCESS) mp_raise_OSError(MP_EIO);
+    }
+    attribute->value = updated.value;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(zigbee_attribute_set_obj, zigbee_attribute_set);
+
 static mp_obj_t zigbee_attribute_send(mp_obj_t self_in, mp_obj_t value_in) {
     zigbee_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
     zigbee_attribute_config_t *attribute = &zigbee_attributes[self->index];
     zigbee_cluster_config_t *cluster = &zigbee_clusters[attribute->cluster_index];
     zigbee_endpoint_config_t *endpoint = &zigbee_endpoints[cluster->endpoint_index];
-    zigbee_store_value(attribute, value_in);
+    if (value_in != MP_OBJ_NULL) zigbee_store_value(attribute, value_in);
     if (!zigbee_ready || !zigbee_joined) mp_raise_OSError(MP_ENOTCONN);
     if (zigbee_report_mutex == NULL) mp_raise_OSError(MP_ENODEV);
 
@@ -694,7 +754,7 @@ static mp_obj_t zigbee_attribute_send(mp_obj_t self_in, mp_obj_t value_in) {
         xSemaphoreGive(zigbee_report_mutex);
         mp_raise_OSError(MP_ETIMEDOUT);
     }
-    ezb_zcl_status_t update = ezb_zcl_set_attr_value(
+    ezb_zcl_status_t update = value_in == MP_OBJ_NULL ? EZB_ZCL_STATUS_SUCCESS : ezb_zcl_set_attr_value(
         endpoint->endpoint_id, cluster->cluster_id, cluster->role,
         attribute->attribute_id, attribute->manufacturer_code, &attribute->value, false);
     ezb_err_t send = EZB_ERR_NONE;
@@ -742,6 +802,12 @@ static mp_obj_t zigbee_attribute_send(mp_obj_t self_in, mp_obj_t value_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(zigbee_attribute_send_obj, zigbee_attribute_send);
 
+// Report the current stack value without overwriting a newer remote command.
+static mp_obj_t zigbee_attribute_report(mp_obj_t self_in) {
+    return zigbee_attribute_send(self_in, MP_OBJ_NULL);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(zigbee_attribute_report_obj, zigbee_attribute_report);
+
 static const mp_rom_map_elem_t zigbee_endpoint_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_add_cluster), MP_ROM_PTR(&zigbee_endpoint_add_cluster_obj) },
 };
@@ -757,6 +823,9 @@ MP_DEFINE_CONST_OBJ_TYPE(zigbee_cluster_type, MP_QSTR_Cluster, MP_TYPE_FLAG_NONE
     locals_dict, &zigbee_cluster_locals);
 
 static const mp_rom_map_elem_t zigbee_attribute_locals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_get), MP_ROM_PTR(&zigbee_attribute_get_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set), MP_ROM_PTR(&zigbee_attribute_set_obj) },
+    { MP_ROM_QSTR(MP_QSTR_report), MP_ROM_PTR(&zigbee_attribute_report_obj) },
     { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&zigbee_attribute_send_obj) },
 };
 static MP_DEFINE_CONST_DICT(zigbee_attribute_locals, zigbee_attribute_locals_table);

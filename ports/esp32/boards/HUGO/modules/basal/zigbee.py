@@ -8,6 +8,12 @@ import zigbee
 
 ELECTRICAL_ENDPOINT = 1
 WEATHER_ENDPOINT = 2
+BUTTON_ENDPOINT = 3
+LED_ENDPOINT = 4
+
+BINARY_INPUT = 0x000F
+ON_OFF = 0x0006
+ON_OFF_LIGHT = 0x0100
 
 ELECTRICAL_MEASUREMENT = zigbee.ELECTRICAL_MEASUREMENT
 TEMPERATURE_MEASUREMENT = zigbee.TEMPERATURE_MEASUREMENT
@@ -49,6 +55,35 @@ class Sensor:
             raise ValueError("value outside sensor range")
         encoded = value * self._scale
         return self._attribute.send(encoded if self._floating else round(encoded))
+
+
+class BinaryState:
+    """Boolean ZCL state; get() also observes commands received from the network."""
+
+    def __init__(self, attribute):
+        self._attribute = attribute
+
+    def get(self):
+        return bool(self._attribute.get())
+
+    def set(self, value):
+        self._attribute.set(bool(value))
+
+    def report(self):
+        return self._attribute.report()
+
+
+def add_button(*, endpoint_id=BUTTON_ENDPOINT):
+    """Expose the physical button as Binary Input PresentValue."""
+    return BinaryState(_attribute(endpoint_id, BINARY_INPUT, 0x0055, zigbee.BOOL, False))
+
+
+def add_led(*, endpoint_id=LED_ENDPOINT):
+    """Expose an On/Off light; the SDK handles On, Off and Toggle commands."""
+    if endpoint_id in _endpoints:
+        raise ValueError("LED endpoint already in use")
+    _endpoints[endpoint_id] = zigbee.add_endpoint(endpoint_id, device_id=ON_OFF_LIGHT)
+    return BinaryState(_attribute(endpoint_id, ON_OFF, 0x0000, zigbee.BOOL, False))
 
 
 def _endpoint(endpoint_id):
