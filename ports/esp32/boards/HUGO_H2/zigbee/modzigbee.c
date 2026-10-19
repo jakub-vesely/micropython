@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "esp_timer.h"
 #include "esp_zigbee.h"
 #include "ezbee/zha.h"
@@ -346,6 +347,7 @@ static void zigbee_task(void *arg) {
         ESP_LOGE(TAG, "esp_zigbee_init failed");
         goto done;
     }
+    ezb_nwk_set_rx_on_when_idle(zigbee_device_type == EZB_NWK_DEVICE_TYPE_ROUTER);
     // Diagnostic setting: accept weak parents while joining or rejoining.
     // Raise this threshold after validating the antenna and network topology.
     ezb_nwk_set_min_join_lqi(zigbee_min_join_lqi);
@@ -427,6 +429,46 @@ static mp_obj_t zigbee_start_router(mp_obj_t max_children_in) {
     return zigbee_start_device(EZB_NWK_DEVICE_TYPE_ROUTER, max_children);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(zigbee_start_router_obj, zigbee_start_router);
+
+// Block only the Python task. FreeRTOS wakes for Zigbee deadlines and honours
+// radio PM locks, unlike a forced esp_light_sleep_start() from the application.
+static mp_obj_t zigbee_idle(mp_obj_t duration_in) {
+    mp_int_t duration_ms = mp_obj_get_int(duration_in);
+    if (duration_ms < 0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("duration must be non-negative"));
+    }
+    if (!zigbee_started) {
+        mp_raise_OSError(MP_ENODEV);
+    }
+    uint64_t ticks = ((uint64_t)duration_ms * configTICK_RATE_HZ + 999) / 1000;
+    if (ticks >= portMAX_DELAY) {
+        mp_raise_ValueError(MP_ERROR_TEXT("duration too long"));
+    }
+    esp_pm_config_t previous;
+    esp_err_t err = esp_pm_get_configuration(&previous);
+    if (err != ESP_OK) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+            MP_ERROR_TEXT("esp_pm_get_configuration failed: %s"), esp_err_to_name(err));
+    }
+    esp_pm_config_t idle = previous;
+    idle.light_sleep_enable = zigbee_ready && zigbee_joined
+        && zigbee_device_type == EZB_NWK_DEVICE_TYPE_END_DEVICE;
+    err = esp_pm_configure(&idle);
+    if (err != ESP_OK) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+            MP_ERROR_TEXT("Zigbee idle configuration failed: %s"), esp_err_to_name(err));
+    }
+    // Keep the VM locked so another Python thread cannot change the PM plan
+    // while its configuration is temporarily overridden. Zigbee uses no VM APIs.
+    vTaskDelay((TickType_t)ticks);
+    err = esp_pm_configure(&previous);
+    if (err != ESP_OK) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+            MP_ERROR_TEXT("Zigbee idle restore failed: %s"), esp_err_to_name(err));
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(zigbee_idle_obj, zigbee_idle);
 
 static mp_obj_t zigbee_is_joined(void) {
     return mp_obj_new_bool(zigbee_joined);
@@ -841,6 +883,7 @@ static const mp_rom_map_elem_t zigbee_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_add_endpoint), MP_ROM_PTR(&zigbee_add_endpoint_obj) },
     { MP_ROM_QSTR(MP_QSTR_start_end_device), MP_ROM_PTR(&zigbee_start_end_device_obj) },
     { MP_ROM_QSTR(MP_QSTR_start_router), MP_ROM_PTR(&zigbee_start_router_obj) },
+    { MP_ROM_QSTR(MP_QSTR_idle), MP_ROM_PTR(&zigbee_idle_obj) },
     { MP_ROM_QSTR(MP_QSTR_joined), MP_ROM_PTR(&zigbee_is_joined_obj) },
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&zigbee_status_obj) },
     { MP_ROM_QSTR(MP_QSTR_join), MP_ROM_PTR(&zigbee_join_obj) },

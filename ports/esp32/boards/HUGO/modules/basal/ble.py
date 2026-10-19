@@ -75,6 +75,7 @@ class BleLogger(LoggerBase):
 
 class Ble():
   _ble = None
+  _connections = set()
   _shell = None
   _remote_value = None
   _keyboard = None
@@ -102,7 +103,7 @@ class Ble():
     cls._initial_time_up = power_plan.ble_plan.initial_time_up
     cls._running_time_up = power_plan.ble_plan.running_time_up
     cls._time_down = power_plan.ble_plan.time_down
-    if cls._time_to_power_save != 0: #if ble connection is not established already
+    if not cls.is_connected(): #zero also means power saving was disabled by the previous plan
       cls._time_to_power_save = cls._initial_time_up
 
   @classmethod
@@ -112,7 +113,7 @@ class Ble():
     try: #to do not be _check_time_to_power_save interupted due to a BLE issue
       if wake_up:
         PowerMgmt.block_power_save()
-        if not cls._time_to_power_save: #can be reset from constructor
+        if not cls._time_to_power_save and not cls.is_connected():
           cls._time_to_power_save = cls._running_time_up
         if cls.just_initialized:
           cls.just_initialized = False

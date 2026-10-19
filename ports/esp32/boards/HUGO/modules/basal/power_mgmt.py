@@ -2,6 +2,7 @@
 #  This software is published under MIT license. Full text of the license is available at https://opensource.org/licenses/MIT
 
 import machine
+import os
 
 class BlePowerPlan:
 
@@ -22,9 +23,14 @@ class BlePowerPlan:
     self.time_down = time_down
 
 class PowerPlan:
-  freq_max = 240000000
-  freq_medium = 160000000
-  freq_min = 80000000
+  if os.uname().machine.rsplit(" with ", 1)[-1] == "ESP32-H2":
+    freq_max = 96000000
+    freq_medium = 64000000
+    freq_min = 32000000
+  else:
+    freq_max = 240000000
+    freq_medium = 160000000
+    freq_min = 80000000
 
   def __init__(self, power_save_enabled, frequency, ble_plan:BlePowerPlan) -> None:
     self.power_save_enabled = power_save_enabled
@@ -47,6 +53,7 @@ class PowerMgmt:
   _power_save_block_count = 0 #can be increased/decreased by more modules. power save is blocked when the block count > 0
   _used_plan = PowerPlan.get_max_performance_plan() #FIXME: will be started with maximal frequency if is not called set_plan explicitly
   _change_callbacks = list()
+  _light_sleep_handler = None
   #_start_light_sleep_callbacks = list()
   #_stop_light_sleep_callbacks = list()
   #_logging = Logging("PwrMgmt")
@@ -61,7 +68,7 @@ class PowerMgmt:
 
   @classmethod
   def is_power_save_enabled(cls):
-    return cls._power_save_block_count == 0
+    return cls._used_plan.power_save_enabled and cls._power_save_block_count == 0
 
   @classmethod
   def set_plan(cls, plan:PowerPlan):
@@ -80,12 +87,22 @@ class PowerMgmt:
     #  start_callback()
 
     machine.freq(PowerPlan.freq_min)
-    machine.lightsleep(duration)
-    machine.freq(cls._used_plan.frequency)
+    try:
+      if cls._light_sleep_handler is None:
+        machine.lightsleep(duration)
+      else:
+        cls._light_sleep_handler(duration)
+    finally:
+      machine.freq(cls._used_plan.frequency)
 
     #for stop_callback in cls._stop_light_sleep_callbacks:
     #  stop_callback()
 
+
+  @classmethod
+  def register_light_sleep_handler(cls, method):
+    """Use a radio-aware idle handler instead of forcing whole-chip sleep."""
+    cls._light_sleep_handler = method
 
   @classmethod
   def register_management_change_callback(cls, method):

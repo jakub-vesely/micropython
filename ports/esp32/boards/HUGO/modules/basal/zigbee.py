@@ -5,6 +5,7 @@ export_devel.py script exports it to the firmware tree as ``basal.zigbee``.
 """
 
 import zigbee
+from basal.power_mgmt import PowerMgmt
 
 ELECTRICAL_ENDPOINT = 1
 WEATHER_ENDPOINT = 2
@@ -175,8 +176,16 @@ def add_sensor(cluster_id, attribute_id=MEASURED_VALUE, *, endpoint_id=None):
     raise ValueError("unsupported cluster or attribute")
 
 
-start_end_device = zigbee.start_end_device
-start_router = zigbee.start_router
+def start_end_device():
+    zigbee.start_end_device()
+    PowerMgmt.register_light_sleep_handler(zigbee.idle)
+
+
+def start_router(max_children):
+    zigbee.start_router(max_children)
+    PowerMgmt.register_light_sleep_handler(zigbee.idle)
+
+
 joined = zigbee.joined
 status = zigbee.status
 join = zigbee.join
